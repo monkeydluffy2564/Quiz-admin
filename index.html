@@ -2387,7 +2387,7 @@ function renderGlobalQuizList(filterText = '') {
             const passInput = document.getElementById('admin-password-input');
             const errorMsg = document.getElementById('password-error-msg');
             // This is a simple, non-secure password. In a real app, use a proper auth system.
-            if (passInput.value === '4') {
+            if (passInput.value === '') {
                 adminPasswordModal.classList.add('hidden');
                 passInput.value = '';
                 errorMsg.classList.add('hidden');
