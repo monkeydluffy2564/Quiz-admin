@@ -5762,36 +5762,38 @@ function displayResultsScoreOnly(score, points, earnedBadges, totalQuestions) {
         }
         
         async function checkShortAnswerForPresentation(questionIndex) {
-            const question = currentQuizData.questions[questionIndex];
-            const input = document.getElementById('presentation-short-answer-input');
-            const checkBtn = document.getElementById('check-presentation-answer-btn');
-            const resultContainer = document.getElementById('presentation-ai-result');
-            const explanationContainer = document.getElementById('presentation-explanation');
+    const question = currentQuizData.questions[questionIndex];
+    const input = document.getElementById('presentation-short-answer-input');
+    const checkBtn = document.getElementById('check-presentation-answer-btn');
+    const resultContainer = document.getElementById('presentation-ai-result');
+    const explanationContainer = document.getElementById('presentation-explanation');
 
-            if (!input || !checkBtn || !resultContainer || !explanationContainer) return;
+    if (!input || !checkBtn || !resultContainer || !explanationContainer) return;
 
-            const userAnswer = input.value.trim();
-            if (userAnswer === '') {
-                return;
-            }
+    const userAnswer = input.value.trim();
+    if (userAnswer === '') {
+        return;
+    }
 
-            checkBtn.disabled = true;
-            checkBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>AI กำลังตรวจ...';
-            input.disabled = true;
+    checkBtn.disabled = true;
+    checkBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>กำลังตรวจ...';
+    input.disabled = true;
 
-            const isCorrect = await gradeShortAnswerWithAI(userAnswer, question.idealAnswer);
+    // --- นี่คือบรรทัดที่ถูกแก้ไข ---
+    // เปลี่ยนมาใช้ฟังก์ชันตรวจคำตอบตัวใหม่ที่ฉลาดขึ้น
+    const isCorrect = await gradeShortAnswer(userAnswer, question);
+    // -------------------------
 
-            if (isCorrect) {
-                resultContainer.innerHTML = '<span class="text-green-500"><i class="fas fa-check-circle"></i> ถูกต้อง</span>';
-            } else {
-                resultContainer.innerHTML = `<span class="text-red-500"><i class="fas fa-times-circle"></i> ไม่ถูกต้อง</span> (คำตอบที่คาดหวัง: ${question.idealAnswer})`;
-            }
-            
-            resultContainer.classList.remove('hidden');
-            explanationContainer.classList.remove('hidden');
-            checkBtn.classList.add('hidden'); // Hide the check button after checking
-        }
-
+    if (isCorrect) {
+        resultContainer.innerHTML = '<span class="text-green-500"><i class="fas fa-check-circle"></i> ถูกต้อง</span>';
+    } else {
+        resultContainer.innerHTML = `<span class="text-red-500"><i class="fas fa-times-circle"></i> ไม่ถูกต้อง</span> (คำตอบที่คาดหวัง: ${question.idealAnswer})`;
+    }
+    
+    resultContainer.classList.remove('hidden');
+    explanationContainer.classList.remove('hidden');
+    checkBtn.classList.add('hidden'); // ซ่อนปุ่มตรวจหลังจากตรวจแล้ว
+}
 
         function revealAnswerForPresentation(questionIndex, selectedButton) {
             const question = currentQuizData.questions[questionIndex];
