@@ -984,6 +984,70 @@
             }
         }
 		
+		/**
+ * ฟังก์ชันสำหรับเปรียบเทียบคำตอบที่เป็นตัวเลขโดยเฉพาะ
+ * @param {string} userAnswer คำตอบจากผู้ใช้
+ * @param {string} idealAnswer คำตอบที่ถูกต้อง
+ * @returns {boolean} คืนค่า true ถ้าตัวเลขเทียบเท่ากัน
+ */
+function compareNumericalAnswers(userAnswer, idealAnswer) {
+    // แปลง comma เป็น period และตัดตัวอักษรที่ไม่ใช่ตัวเลขออก (ยกเว้นจุดทศนิยมและเครื่องหมายลบ)
+    const cleanUserStr = String(userAnswer).replace(',', '.').replace(/[^\d.-]/g, '').trim();
+    const cleanIdealStr = String(idealAnswer).replace(',', '.').replace(/[^\d.-]/g, '').trim();
+
+    // ถ้าสตริงว่างเปล่าหลังจากการล้างค่า ให้ถือว่าไม่ใช่ตัวเลข
+    if (cleanUserStr === '' || cleanIdealStr === '') {
+        return false;
+    }
+
+    const userNum = parseFloat(cleanUserStr);
+    const idealNum = parseFloat(cleanIdealStr);
+
+    // ตรวจสอบว่าทั้งสองค่าเป็นตัวเลขที่ถูกต้องหรือไม่
+    if (isNaN(userNum) || isNaN(idealNum)) {
+        return false;
+    }
+
+    // เปรียบเทียบตัวเลขโดยยอมรับค่าคลาดเคลื่อนเล็กน้อย (Epsilon) สำหรับทศนิยม
+    return Math.abs(userNum - idealNum) < 0.001;
+}
+
+/**
+ * ฟังก์ชันตรวจคำตอบแบบสั้น/เติมคำแบบหลายชั้น
+ * @param {string} userAnswer คำตอบจากผู้ใช้
+ * @param {object} questionData ข้อมูลคำถามทั้งหมด ซึ่งมี idealAnswer
+ * @returns {Promise<boolean>} คืนค่า Promise ที่ resolve เป็น true หากคำตอบถูกต้อง
+ */
+async function gradeShortAnswer(userAnswer, questionData) {
+    const idealAnswer = questionData.idealAnswer;
+
+    // --- ขั้นที่ 1: ตรวจสอบแบบตรงตัว (Case-Insensitive) ---
+    // วิธีที่เร็วที่สุด
+    if (String(userAnswer).trim().toLowerCase() === String(idealAnswer).trim().toLowerCase()) {
+        return true;
+    }
+
+    // --- ขั้นที่ 2: ตรวจสอบเชิงตัวเลข (Numerical Check) ---
+    // สำหรับคำตอบที่เป็นการคำนวณ
+    if (compareNumericalAnswers(userAnswer, idealAnswer)) {
+        return true;
+    }
+
+    // --- (ทางเลือก) ขั้นที่ 3: ตรวจสอบกับรายการคำตอบที่ยอมรับได้ ---
+    // หากคุณต้องการให้ครูสามารถเพิ่มคำตอบอื่นๆ ที่ถูกต้องได้
+    // if (questionData.acceptedAnswers && Array.isArray(questionData.acceptedAnswers)) {
+    //     const normalizedUserAnswer = String(userAnswer).trim().toLowerCase();
+    //     if (questionData.acceptedAnswers.some(ans => String(ans).trim().toLowerCase() === normalizedUserAnswer)) {
+    //         return true;
+    //     }
+    // }
+
+    // --- ขั้นที่ 4: ใช้ AI เป็นทางเลือกสุดท้าย ---
+    // เมื่อการตรวจสอบเบื้องต้นทั้งหมดไม่สำเร็จ
+    console.log("Programmatic checks failed. Deferring to AI for grading.");
+    return await gradeShortAnswerWithAI(userAnswer, idealAnswer);
+}
+		
 		async function revealAnswerForAdmin(index, total) {
             // ป้องกันการทำงานซ้ำซ้อน หากปุ่ม "ข้อต่อไป" ถูกสร้างไปแล้ว
             if (document.getElementById('next-live-question-btn')) return;
@@ -2372,8 +2436,10 @@ function renderGlobalQuizList(filterText = '') {
             const switcherBtn = document.getElementById('mode-switcher-btn');
             if (currentMode === 'student') {
                 // If in student mode, try to switch to admin
-                adminPasswordModal.classList.remove('hidden');
-                document.getElementById('admin-password-input').focus();
+                currentMode = 'admin';
+switcherBtn.innerHTML = `<i class="fas fa-user-graduate fa-lg"></i>`;
+switcherBtn.title = "สลับไปโหมดนักเรียน";
+showView('admin-dashboard');
             } else {
                 // If in admin mode, switch back to student
                 currentMode = 'student';
@@ -2387,7 +2453,7 @@ function renderGlobalQuizList(filterText = '') {
             const passInput = document.getElementById('admin-password-input');
             const errorMsg = document.getElementById('password-error-msg');
             // This is a simple, non-secure password. In a real app, use a proper auth system.
-            if (passInput.value === '') {
+            if (passInput.value === '2741') {
                 adminPasswordModal.classList.add('hidden');
                 passInput.value = '';
                 errorMsg.classList.add('hidden');
@@ -4934,146 +5000,153 @@ html += q.options.map((opt, i) => `
 
 
         async function processAndSubmitAnswers(userAnswers, previousAttempts) {
-            let score = 0;
-            let points = 0;
-            let earnedBadges = [];
-            const detailedAnswers = [];
-            const totalQuestions = currentDisplayedQuiz.questions.length;
-            
-            // --- Gamification Logic ---
-            let correctStreak = 0;
+    let score = 0;
+    let points = 0;
+    let earnedBadges = [];
+    const detailedAnswers = [];
+    const totalQuestions = currentDisplayedQuiz.questions.length;
 
-            const questions = currentDisplayedQuiz.questions;
-            for (let i = 0; i < questions.length; i++) {
-                const q = questions[i];
-                const userAnswer = userAnswers[i];
-                const questionType = q.questionType || currentDisplayedQuiz.quizType;
-                let isCorrect = false;
+    // --- Gamification Logic ---
+    let correctStreak = 0;
 
-                if (userAnswer !== null && userAnswer !== "") {
-                    switch(questionType) {
-                        case 'matching_item':
-                            isCorrect = userAnswer === q.correctResponse;
-                            break;
-                        case 'true_false':
-  // แปลงคำตอบผู้ใช้ให้เป็น boolean ก่อนเทียบ
-  const userBool = (userAnswer === true || userAnswer === 'true');
-  isCorrect = (userBool === q.correctAnswer);
-  break;
+    const questions = currentDisplayedQuiz.questions;
+    for (let i = 0; i < questions.length; i++) {
+        const q = questions[i];
+        const userAnswer = userAnswers[i];
+        const questionType = q.questionType || currentDisplayedQuiz.quizType;
+        let isCorrect = false;
 
-case 'fill_in_the_blank':
-case 'multiple_choice':
-default:
-  // แปลงเป็นตัวเลขก่อนเทียบ เพื่อกันกรณี "1" vs 1
-  isCorrect = (Number(userAnswer) === q.correctAnswerIndex);
-  break;
+        if (userAnswer !== null && userAnswer !== "") {
+            switch (questionType) {
+                case 'matching_item':
+                    isCorrect = userAnswer === q.correctResponse;
+                    break;
+                case 'true_false':
+                    // แปลงคำตอบผู้ใช้ให้เป็น boolean ก่อนเทียบ
+                    const userBool = (userAnswer === true || userAnswer === 'true');
+                    isCorrect = (userBool === q.correctAnswer);
+                    break;
 
-                        case 'short_answer':
-                            isCorrect = await gradeShortAnswerWithAI(userAnswer, q.idealAnswer);
-                            break;
-                    }
-                }
-                
-                if (isCorrect) {
-                    score++;
-                    correctStreak++;
-                    if (correctStreak === 3) {
-                         earnedBadges.push(BADGES.ON_FIRE.id);
-                         correctStreak = 0;
-                    }
-                } else {
-                    correctStreak = 0; // Reset streak on incorrect answer
-                }
+                case 'fill_in_the_blank':
+                case 'multiple_choice':
+                default:
+                    // แปลงเป็นตัวเลขก่อนเทียบ เพื่อกันกรณี "1" vs 1
+                    isCorrect = (Number(userAnswer) === q.correctAnswerIndex);
+                    break;
 
-                detailedAnswers.push({ answer: userAnswer, isCorrect: isCorrect });
-            }
-            
-            points = score * 10; // Base points
-            if (score === totalQuestions && totalQuestions > 0 && !currentDisplayedQuiz.isRemedial) {
-                points += 50; // Perfect score bonus
-                earnedBadges.push(BADGES.PERFECT_SCORE.id);
-            }
-            const passingScore = currentDisplayedQuiz.settings?.passingScore ?? Math.floor(totalQuestions / 2);
-            // Check for speed bonus if it was a timed quiz
-            const timerMode = currentDisplayedQuiz.settings?.timerMode;
-            if (timerMode === 'whole_quiz' && quizStartTime) {
-                const timeTaken = (new Date() - quizStartTime) / 1000; // in seconds
-                const timeAllowed = currentDisplayedQuiz.settings.timerDuration * 60;
-                if (score >= passingScore && timeTaken < timeAllowed / 2) {
-                    points += 20; // Speed bonus
-                    earnedBadges.push(BADGES.QUICK_THINKER.id);
-                }
-            }
-            // --- Badge Logic for new badges ---
-
-            // 1. First-Try Ace: Perfect score on the very first attempt.
-            if (previousAttempts.length === 0 && score === totalQuestions && totalQuestions > 0) {
-                earnedBadges.push(BADGES.FIRST_TRY_ACE.id);
-            }
-
-            // 2. Comeback King: Failed the first time, but passed this time.
-            if (previousAttempts.length > 0) {
-                const firstAttemptScore = previousAttempts[0].score;
-                if (firstAttemptScore < passingScore && score >= passingScore) {
-                    // Check if they haven't earned this badge for this quiz before
-                    const hasComebackBadge = previousAttempts.some(attempt => 
-                        (attempt.badges || []).includes(BADGES.COMEBACK_KING.id)
-                    );
-                    if (!hasComebackBadge) {
-                        earnedBadges.push(BADGES.COMEBACK_KING.id);
-                    }
-                }
-            }
-            // 3. Perseverance: Awarded on the 5th attempt
-            if (previousAttempts.length === 4) { // This is the 5th attempt (0-indexed)
-                earnedBadges.push(BADGES.PERSEVERANCE.id);
-            }
-            // In admin test mode, use the project's current settings for display
-            const displaySetting = currentDisplayedQuiz.settings.resultsDisplay;
-
-            if (currentMode === 'admin-testing') {
-                 handleResultDisplay(displaySetting, score, points, earnedBadges, detailedAnswers, totalQuestions);
-                 return;
-            }
-
-            const quizId = currentQuizData.id;
-            const submissionRef = doc(db, `artifacts/${appId}/public/data/quizzes/${quizId}/submissions`, currentStudentName);
-            
-            try {
-                const attempts = [...previousAttempts]; // Create a mutable copy
-                const newAttempt = {
-                    score: score,
-                    points: points,
-                    badges: earnedBadges,
-                    submittedAt: new Date().toISOString(),
-                    answers: detailedAnswers
-                };
-                attempts.push(newAttempt);
-
-                const firstScore = attempts[0].score;
-                const bestScore = Math.max(...attempts.map(a => a.score));
-                const latestScore = score;
-                const latestSubmittedAt = newAttempt.submittedAt;
-
-                await setDoc(submissionRef, {
-                    studentName: currentStudentName,
-                    totalQuestions: totalQuestions,
-                    attempts: attempts,
-                    firstScore: firstScore,
-                    bestScore: bestScore,
-                    latestScore: latestScore,
-                    points: points, // Store points from the latest attempt
-                    latestSubmittedAt: latestSubmittedAt
-                });
-
-                // Update the aggregated student profile for the leaderboard
-                await updateStudentProfile(currentQuizData.projectId, currentStudentName);
-                handleResultDisplay(displaySetting, score, points, earnedBadges, detailedAnswers, totalQuestions);
-            } catch (error) {
-                console.error("Error saving submission:", error);
-                showMessage("เกิดข้อผิดพลาดในการบันทึกคำตอบของคุณ");
+                 case 'short_answer':
+                    // เรียกใช้ฟังก์ชันตรวจคำตอบแบบหลายชั้นตัวใหม่
+                    isCorrect = await gradeShortAnswer(userAnswer, q);
+                    break;
             }
         }
+
+        if (isCorrect) {
+            score++;
+            correctStreak++;
+            if (correctStreak === 3) {
+                earnedBadges.push(BADGES.ON_FIRE.id);
+                correctStreak = 0;
+            }
+        } else {
+            correctStreak = 0; // Reset streak on incorrect answer
+        }
+        
+        // --- [การแก้ไขที่สำคัญ] ---
+        // เพิ่ม originalQuestionText เพื่อให้สถิติถูกต้องเสมอ
+        detailedAnswers.push({
+            answer: userAnswer,
+            isCorrect: isCorrect,
+            originalQuestionText: q.stem || q.questionText
+        });
+    }
+
+    points = score * 10; // Base points
+    if (score === totalQuestions && totalQuestions > 0 && !currentDisplayedQuiz.isRemedial) {
+        points += 50; // Perfect score bonus
+        earnedBadges.push(BADGES.PERFECT_SCORE.id);
+    }
+    const passingScore = currentDisplayedQuiz.settings?.passingScore ?? Math.floor(totalQuestions / 2);
+    // Check for speed bonus if it was a timed quiz
+    const timerMode = currentDisplayedQuiz.settings?.timerMode;
+    if (timerMode === 'whole_quiz' && quizStartTime) {
+        const timeTaken = (new Date() - quizStartTime) / 1000; // in seconds
+        const timeAllowed = currentDisplayedQuiz.settings.timerDuration * 60;
+        if (score >= passingScore && timeTaken < timeAllowed / 2) {
+            points += 20; // Speed bonus
+            earnedBadges.push(BADGES.QUICK_THINKER.id);
+        }
+    }
+    // --- Badge Logic for new badges ---
+
+    // 1. First-Try Ace: Perfect score on the very first attempt.
+    if (previousAttempts.length === 0 && score === totalQuestions && totalQuestions > 0) {
+        earnedBadges.push(BADGES.FIRST_TRY_ACE.id);
+    }
+
+    // 2. Comeback King: Failed the first time, but passed this time.
+    if (previousAttempts.length > 0) {
+        const firstAttemptScore = previousAttempts[0].score;
+        if (firstAttemptScore < passingScore && score >= passingScore) {
+            // Check if they haven't earned this badge for this quiz before
+            const hasComebackBadge = previousAttempts.some(attempt =>
+                (attempt.badges || []).includes(BADGES.COMEBACK_KING.id)
+            );
+            if (!hasComebackBadge) {
+                earnedBadges.push(BADGES.COMEBACK_KING.id);
+            }
+        }
+    }
+    // 3. Perseverance: Awarded on the 5th attempt
+    if (previousAttempts.length === 4) { // This is the 5th attempt (0-indexed)
+        earnedBadges.push(BADGES.PERSEVERANCE.id);
+    }
+    // In admin test mode, use the project's current settings for display
+    const displaySetting = currentDisplayedQuiz.settings.resultsDisplay;
+
+    if (currentMode === 'admin-testing') {
+        handleResultDisplay(displaySetting, score, points, earnedBadges, detailedAnswers, totalQuestions);
+        return;
+    }
+
+    const quizId = currentQuizData.id;
+    const submissionRef = doc(db, `artifacts/${appId}/public/data/quizzes/${quizId}/submissions`, currentStudentName);
+
+    try {
+        const attempts = [...previousAttempts]; // Create a mutable copy
+        const newAttempt = {
+            score: score,
+            points: points,
+            badges: earnedBadges,
+            submittedAt: new Date().toISOString(),
+            answers: detailedAnswers
+        };
+        attempts.push(newAttempt);
+
+        const firstScore = attempts[0].score;
+        const bestScore = Math.max(...attempts.map(a => a.score));
+        const latestScore = score;
+        const latestSubmittedAt = newAttempt.submittedAt;
+
+        await setDoc(submissionRef, {
+            studentName: currentStudentName,
+            totalQuestions: totalQuestions,
+            attempts: attempts,
+            firstScore: firstScore,
+            bestScore: bestScore,
+            latestScore: latestScore,
+            points: points, // Store points from the latest attempt
+            latestSubmittedAt: latestSubmittedAt
+        });
+
+        // Update the aggregated student profile for the leaderboard
+        await updateStudentProfile(currentQuizData.projectId, currentStudentName);
+        handleResultDisplay(displaySetting, score, points, earnedBadges, detailedAnswers, totalQuestions);
+    } catch (error) {
+        console.error("Error saving submission:", error);
+        showMessage("เกิดข้อผิดพลาดในการบันทึกคำตอบของคุณ");
+    }
+}
         
         async function updateStudentProfile(projectId, studentName) {
     const profileRef = doc(db, `artifacts/${appId}/public/data/projects/${projectId}/studentProfiles`, studentName);
@@ -6249,72 +6322,87 @@ await processAndSubmitAnswers(studentAnswersPerQuestion, previousAttempts);
         }
         
         function renderQuestionAnalytics(quizData, submissions, students) {
-            const container = document.getElementById('question-analytics-container');
-            if (students.length === 0) {
-                container.innerHTML = '<p class="text-gray-500 text-center">ยังไม่มีนักเรียนในโปรเจคเพื่อวิเคราะห์รายข้อ</p>';
-                return;
-            }
+    const container = document.getElementById('question-analytics-container');
+    if (students.length === 0) {
+        container.innerHTML = '<p class="text-gray-500 text-center">ยังไม่มีนักเรียนในโปรเจคเพื่อวิเคราะห์รายข้อ</p>';
+        return;
+    }
 
-            let html = '';
-            const submittedNames = submissions.map(s => s.studentName);
+    let html = '';
+    const submittedNames = submissions.map(s => s.studentName);
 
-            quizData.questions.forEach((q, index) => {
-                let correctCount = 0;
-                const correctStudents = [];
-                const incorrectStudents = [];
+    quizData.questions.forEach((q, index) => {
+        let correctCount = 0;
+        const correctStudents = [];
+        const incorrectStudents = [];
+        const questionDisplayText = q.stem || q.questionText || q.instructions;
 
-                submissions.forEach(sub => {
-                    // Use the latest attempt for analytics
-                    const latestAttempt = sub.attempts[sub.attempts.length - 1];
-                    if (latestAttempt && latestAttempt.answers && latestAttempt.answers[index]) {
-                        if (latestAttempt.answers[index].isCorrect) {
-                            correctCount++;
-                            correctStudents.push(sub.studentName);
-                        } else {
-                            incorrectStudents.push(sub.studentName);
-                        }
-                    }
-                });
+        submissions.forEach(sub => {
+            // Use the latest attempt for analytics
+            const latestAttempt = sub.attempts[sub.attempts.length - 1];
+            if (latestAttempt && latestAttempt.answers) {
                 
-                const unsubmittedStudents = students.filter(name => !submittedNames.includes(name));
-                const correctRate = submissions.length > 0 ? (correctCount / submissions.length) * 100 : 0;
-                const questionDisplayText = q.stem || q.questionText || q.instructions;
+                // --- [การแก้ไขที่สำคัญ] ---
+                // ค้นหาคำตอบจากข้อความของคำถาม แทนที่จะใช้ลำดับที่ (index)
+                const studentAnswerForThisQuestion = latestAttempt.answers.find(ans =>
+                    ans.originalQuestionText === questionDisplayText
+                );
 
-                html += `
-                    <details class="bg-gray-50 p-3 rounded-lg">
-                        <summary class="flex justify-between items-center cursor-pointer font-semibold">
-                            <span class="w-3/4 truncate">ข้อ ${index + 1}: ${questionDisplayText}</span>
-                             <div class="flex items-center gap-4">
-                               <span class="text-sm font-normal px-2 py-1 rounded ${correctRate >= 70 ? 'bg-green-200 text-green-800' : correctRate >= 40 ? 'bg-yellow-200 text-yellow-800' : 'bg-red-200 text-red-800'}">
-                                   ตอบถูก ${correctRate.toFixed(0)}%
-                               </span>
-                               <i class="fas fa-chevron-right details-marker"></i>
-                            </div>
-                        </summary>
-                        <div class="mt-3 pt-3 border-t text-sm space-y-2">
-                            <p><strong>คำถาม:</strong> ${questionDisplayText}</p>
-                            <p><strong>สถิติ:</strong> นักเรียน ${correctCount} จาก ${submissions.length} คนที่ส่ง ตอบถูก</p>
-                            <div class="mt-2">
-                                <p class="font-semibold text-green-700">ตอบถูก (${correctStudents.length} คน):</p>
-                                <p class="text-xs text-gray-600 pl-2">${correctStudents.length > 0 ? correctStudents.join(', ') : 'ไม่มี'}</p>
-                            </div>
-                            <div class="mt-2">
-                                <p class="font-semibold text-red-700">ตอบผิด (${incorrectStudents.length} คน):</p>
-                                <p class="text-xs text-gray-600 pl-2">${incorrectStudents.length > 0 ? incorrectStudents.join(', ') : 'ไม่มี'}</p>
-                            </div>
-                            <div class="mt-2">
-                                <p class="font-semibold text-gray-500">ยังไม่ส่ง (${unsubmittedStudents.length} คน):</p>
-                                <p class="text-xs text-gray-600 pl-2">${unsubmittedStudents.length > 0 ? unsubmittedStudents.join(', ') : 'ไม่มี'}</p>
-                            </div>
-                        </div>
-                    </details>
-                `;
-            });
-            container.innerHTML = html;
-// Re-render MathJax for dynamically injected analytics content
-try { if (window.MathJax && MathJax.typesetPromise) { MathJax.typesetPromise([container]); } } catch (e) { console.error('MathJax typeset error (analytics):', e); }
+                if (studentAnswerForThisQuestion) {
+                    if (studentAnswerForThisQuestion.isCorrect) {
+                        correctCount++;
+                        correctStudents.push(sub.studentName);
+                    } else {
+                        incorrectStudents.push(sub.studentName);
+                    }
+                }
+            }
+        });
 
+        const unsubmittedStudents = students.filter(name => !submittedNames.includes(name));
+        const correctRate = submissions.length > 0 ? (correctCount / submissions.length) * 100 : 0;
+
+        html += `
+            <details class="bg-gray-50 p-3 rounded-lg">
+                <summary class="flex justify-between items-center cursor-pointer font-semibold">
+                    <span class="w-3/4 truncate">ข้อ ${index + 1}: ${questionDisplayText}</span>
+                     <div class="flex items-center gap-4">
+                       <span class="text-sm font-normal px-2 py-1 rounded ${correctRate >= 70 ? 'bg-green-200 text-green-800' : correctRate >= 40 ? 'bg-yellow-200 text-yellow-800' : 'bg-red-200 text-red-800'}">
+                           ตอบถูก ${correctRate.toFixed(0)}%
+                       </span>
+                       <i class="fas fa-chevron-right details-marker"></i>
+                    </div>
+                </summary>
+                <div class="mt-3 pt-3 border-t text-sm space-y-2">
+                    <p><strong>คำถาม:</strong> ${questionDisplayText}</p>
+                    <p><strong>สถิติ:</strong> นักเรียน ${correctCount} จาก ${submissions.length} คนที่ส่ง ตอบถูก</p>
+                    <div class="mt-2">
+                        <p class="font-semibold text-green-700">ตอบถูก (${correctStudents.length} คน):</p>
+                        <p class="text-xs text-gray-600 pl-2">${correctStudents.length > 0 ? correctStudents.join(', ') : 'ไม่มี'}</p>
+                    </div>
+                    <div class="mt-2">
+                        <p class="font-semibold text-red-700">ตอบผิด (${incorrectStudents.length} คน):</p>
+                        <p class="text-xs text-gray-600 pl-2">${incorrectStudents.length > 0 ? incorrectStudents.join(', ') : 'ไม่มี'}</p>
+                    </div>
+                    <div class="mt-2">
+                        <p class="font-semibold text-gray-500">ยังไม่ส่ง (${unsubmittedStudents.length} คน):</p>
+                        <p class="text-xs text-gray-600 pl-2">${unsubmittedStudents.length > 0 ? unsubmittedStudents.join(', ') : 'ไม่มี'}</p>
+                    </div>
+                </div>
+            </details>
+        `;
+    });
+    container.innerHTML = html;
+    // Re-render MathJax for dynamically injected analytics content
+    try {
+        if (window.MathJax && MathJax.typesetPromise) {
+            MathJax.typesetPromise([container]);
         }
+    } catch (e) {
+        console.error('MathJax typeset error (analytics):', e);
+    }
+}
+
         async function handleAnalyzeClass() {
     // ตรวจสอบว่ามีข้อมูลแบบทดสอบที่กำลังดูอยู่หรือไม่
     if (!currentQuizData || !currentQuizData.id) {
