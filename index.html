@@ -1240,7 +1240,7 @@ async function handleStartLiveRace(quizId) {
   const projectIdForGame = quiz.projectId || currentProjectId || null;
 
   // สร้างห้องเกม
-  const gamePin = Math.floor(10 + Math.random() * 90).toString();
+  const gamePin = Math.floor(1000 + Math.random() * 9000).toString();
   currentLiveGamePin = gamePin;
 
   try {
@@ -1622,100 +1622,102 @@ function showStudentLiveQuestionView(question, index, total) {
 }
 
 async function handleLiveAnswer(answerIndex, question) {
-            // Disable all buttons after answering to prevent multiple submissions
-            document.querySelectorAll('.live-answer-btn, #live-submit-short-answer-btn').forEach(b => b.disabled = true);
+    // Disable all buttons after answering to prevent multiple submissions
+    document.querySelectorAll('.live-answer-btn, #live-submit-short-answer-btn').forEach(b => b.disabled = true);
 
-            const questionType = question.questionType || currentQuizData.quizType;
-            let isCorrect = false;
+    const questionType = question.questionType || currentQuizData.quizType;
+    let isCorrect = false;
 
-            // Determine if the selected answer is correct
-            if (questionType === 'short_answer') {
-                // สำหรับเกมสด ตรวจคำตอบแบบตรงตัว (case-insensitive)
-                const userAnswer = (answerIndex || '').toString().trim();
-                const idealAnswer = (question.idealAnswer || '').toString().trim();
-                isCorrect = userAnswer.toLowerCase() === idealAnswer.toLowerCase() && userAnswer !== '';
+    // Determine if the selected answer is correct
+    if (questionType === 'short_answer') {
+        // --- [ส่วนที่แก้ไข] ---
+        // สำหรับเกมสด คำตอบที่พิมพ์จะถูกส่งมาในพารามิเตอร์ answerIndex
+        const userAnswer = (answerIndex || '').toString(); 
+        // เรียกใช้ฟังก์ชันตรวจคำตอบอัจฉริยะของเรา
+        isCorrect = await gradeShortAnswer(userAnswer, question);
+        // --- [สิ้นสุดส่วนที่แก้ไข] ---
+    }
+    else if (questionType === 'multiple_choice') {
+        isCorrect = answerIndex === question.correctAnswerIndex;
+    } else if (questionType === 'true_false') {
+        const correctAnswerBool = question.correctAnswer;
+        isCorrect = (answerIndex === 0 && correctAnswerBool) || (answerIndex === 1 && !correctAnswerBool);
+    } else if (questionType === 'matching_item') {
+        const selectedResponse = question.allResponses[answerIndex];
+        isCorrect = selectedResponse === question.correctResponse;
+    }
+
+    const gameRef = doc(db, `artifacts/${appId}/public/data/liveGames`, currentLiveGameId);
+    const gameSnap = await getDoc(gameRef);
+
+    if (!gameSnap.exists()) return;
+
+    const gameData = gameSnap.data();
+    const playerData = gameData.players[currentStudentName];
+    
+    // --- UPDATED LOGIC FOR DYNAMIC SCORING & BADGES ---
+    let playerBadges = playerData.badges || [];
+    let playerStreak = playerData.correctStreak || 0;
+    const updatePayload = {};
+    let calculatedPoints = 0;
+
+    // 1. Calculate time taken
+    if (gameData.questionDisplayedAt) {
+        const questionStartTime = gameData.questionDisplayedAt.toDate();
+        const timeTaken = new Date() - questionStartTime; // in milliseconds
+
+        if (isCorrect) {
+            // 2. Calculate dynamic points based on speed
+            const maxPoints = 1000;
+            const bonusPoints = 500; // Points decay over time
+            const timeLimit = 20000; // 20 seconds
+
+            let timeRatio = timeTaken / timeLimit;
+            if (timeRatio > 1) timeRatio = 1;
+
+            const pointsLost = Math.round(timeRatio * bonusPoints);
+            calculatedPoints = maxPoints - pointsLost;
+
+            // 3. Award "Quick Thinker" badge
+            if (timeTaken <= 5000 && !playerBadges.includes('quick_thinker')) {
+                playerBadges.push('quick_thinker');
             }
-            else if (questionType === 'multiple_choice') {
-                isCorrect = answerIndex === question.correctAnswerIndex;
-            } else if (questionType === 'true_false') {
-                const correctAnswerBool = question.correctAnswer;
-                isCorrect = (answerIndex === 0 && correctAnswerBool) || (answerIndex === 1 && !correctAnswerBool);
-            } else if (questionType === 'matching_item') {
-                const selectedResponse = question.allResponses[answerIndex];
-                isCorrect = selectedResponse === question.correctResponse;
-            }
-
-            const gameRef = doc(db, `artifacts/${appId}/public/data/liveGames`, currentLiveGameId);
-            const gameSnap = await getDoc(gameRef);
-
-            if (!gameSnap.exists()) return;
-
-            const gameData = gameSnap.data();
-            const playerData = gameData.players[currentStudentName];
-            
-            // --- UPDATED LOGIC FOR DYNAMIC SCORING & BADGES ---
-            let playerBadges = playerData.badges || [];
-            let playerStreak = playerData.correctStreak || 0;
-            const updatePayload = {};
-            let calculatedPoints = 0;
-
-            // 1. Calculate time taken
-            if (gameData.questionDisplayedAt) {
-                const questionStartTime = gameData.questionDisplayedAt.toDate();
-                const timeTaken = new Date() - questionStartTime; // in milliseconds
-
-                if (isCorrect) {
-                    // 2. Calculate dynamic points based on speed
-                    const maxPoints = 1000;
-                    const bonusPoints = 500; // Points decay over time
-                    const timeLimit = 20000; // 20 seconds
-
-                    let timeRatio = timeTaken / timeLimit;
-                    if (timeRatio > 1) timeRatio = 1;
-
-                    const pointsLost = Math.round(timeRatio * bonusPoints);
-                    calculatedPoints = maxPoints - pointsLost;
-
-                    // 3. Award "Quick Thinker" badge
-                    if (timeTaken <= 5000 && !playerBadges.includes('quick_thinker')) {
-                        playerBadges.push('quick_thinker');
-                    }
-                }
-            }
-            
-            // 4. Award "On Fire" badge
-            if (isCorrect) {
-                playerStreak++;
-                if (playerStreak === 3 && !playerBadges.includes('on_fire')) {
-                    playerBadges.push('on_fire');
-                    playerStreak = 0;
-                }
-            } else {
-                playerStreak = 0;
-            }
-            
-            // 5. Prepare payload for Firestore update
-            if (isCorrect) {
-                updatePayload[`players.${currentStudentName}.score`] = increment(calculatedPoints);
-            }
-            updatePayload[`players.${currentStudentName}.badges`] = playerBadges;
-            updatePayload[`players.${currentStudentName}.correctStreak`] = playerStreak;
-			updatePayload[`players.${currentStudentName}.answeredCurrentQuestion`] = true;
-            updatePayload[`players.${currentStudentName}.lastAnswerCorrect`] = isCorrect;
-			updatePayload[`players.${currentStudentName}.pointsLastQuestion`] = calculatedPoints;
-
-
-            // 6. Update Firestore
-            await updateDoc(gameRef, updatePayload);
-            // --- END OF UPDATED LOGIC ---
-
-            // Show the waiting screen
-            liveGameView.innerHTML = `<div class="live-game-bg text-white rounded-lg p-8 text-center flex flex-col items-center justify-center h-full">
-                <h2 class="text-3xl font-bold">ส่งคำตอบแล้ว!</h2>
-                <p class="mt-8">รอผู้เล่นคนอื่นสักครู่...</p>
-                <div class="loader mt-4"></div>
-            </div>`;
         }
+    }
+    
+    // 4. Award "On Fire" badge
+    if (isCorrect) {
+        playerStreak++;
+        if (playerStreak === 3 && !playerBadges.includes('on_fire')) {
+            playerBadges.push('on_fire');
+            playerStreak = 0;
+        }
+    } else {
+        playerStreak = 0;
+    }
+    
+    // 5. Prepare payload for Firestore update
+    if (isCorrect) {
+        updatePayload[`players.${currentStudentName}.score`] = increment(calculatedPoints);
+    }
+    updatePayload[`players.${currentStudentName}.badges`] = playerBadges;
+    updatePayload[`players.${currentStudentName}.correctStreak`] = playerStreak;
+    updatePayload[`players.${currentStudentName}.answeredCurrentQuestion`] = true;
+    updatePayload[`players.${currentStudentName}.lastAnswerCorrect`] = isCorrect;
+    updatePayload[`players.${currentStudentName}.pointsLastQuestion`] = calculatedPoints;
+
+
+    // 6. Update Firestore
+    await updateDoc(gameRef, updatePayload);
+    // --- END OF UPDATED LOGIC ---
+
+    // Show the waiting screen
+    liveGameView.innerHTML = `<div class="live-game-bg text-white rounded-lg p-8 text-center flex flex-col items-center justify-center h-full">
+        <h2 class="text-3xl font-bold">ส่งคำตอบแล้ว!</h2>
+        <p class="mt-8">รอผู้เล่นคนอื่นสักครู่...</p>
+        <div class="loader mt-4"></div>
+    </div>`;
+}
 
 function createQuizFromBank() {
     const selectedCheckboxes = document.querySelectorAll('#bank-input-area input[type="checkbox"]:checked');
