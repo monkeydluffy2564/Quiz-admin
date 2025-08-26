@@ -2930,6 +2930,29 @@ function showStarredProjectView() {
     };
 }
 
+/**
+ * ฟังก์ชันสำหรับตรวจสอบและแก้ไขสตริงคณิตศาสตร์ที่ AI สร้างขึ้น
+ * จะค้นหานิพจน์ที่ควรจะเป็น LaTeX แต่ยังไม่มีเครื่องหมาย $ ครอบ
+ * @param {string} text - ข้อความที่ต้องการตรวจสอบ
+ * @returns {string} ข้อความที่ผ่านการแก้ไขแล้ว
+ */
+function autoFormatMath(text) {
+    if (typeof text !== 'string' || !text) {
+        return text;
+    }
+
+    // Regex นี้จะมองหานิพจน์ที่พบบ่อยๆ เช่น "ตัวเลข \times ตัวเลข", "ตัวเลข^ตัวเลข", หรือคำสั่ง LaTeX 
+    // โดยจะทำงานเฉพาะกับส่วนที่ยังไม่ได้ถูกครอบด้วยเครื่องหมาย $ อยู่แล้ว
+    const mathPattern = /((?<!\$)\b(\d+(\.\d+)?\s*(\\times|\\div)\s*\d+(\.\d+)?|(\d+\s*\^\s*\{?\d+\}?)|(\\frac|\\sqrt|\\pm|\\geq|\\leq|\\neq))\b(?!\$))/g;
+
+    let formattedText = text.replace(mathPattern, (match) => {
+        // ครอบนิพจน์ที่หาเจอด้วยเครื่องหมาย $
+        return `$${match.trim()}$`;
+    });
+
+    return formattedText;
+}
+
         // --- Math Sanitization ---
         function sanitizeQuizData(quizData) {
             if (!quizData || !quizData.questions) return quizData;
@@ -2940,15 +2963,19 @@ function showStarredProjectView() {
             };
 
             const sanitizeText = (text) => {
-                if (typeof text !== 'string') return text;
-                let sanitizedText = text;
-                for (const [wrong, correct] of Object.entries(replacements)) {
-                    // Use word boundaries to avoid replacing parts of words, e.g., 'div' in 'division'.
-                    const regex = new RegExp(`\\b${wrong}\\b`, 'g');
-                    sanitizedText = sanitizedText.replace(regex, correct);
-                }
-                return sanitizedText;
-            };
+    if (typeof text !== 'string') return text;
+    let sanitizedText = text;
+    for (const [wrong, correct] of Object.entries(replacements)) {
+        // Use word boundaries to avoid replacing parts of words, e.g., 'div' in 'division'.
+        const regex = new RegExp(`\\b${wrong}\\b`, 'g');
+        sanitizedText = sanitizedText.replace(regex, correct);
+    }
+
+    // --- เพิ่มโค้ดบรรทัดนี้เข้าไป ---
+    sanitizedText = autoFormatMath(sanitizedText);
+
+    return sanitizedText;
+};
 
             if (quizData.topic) {
                 quizData.topic = sanitizeText(quizData.topic);
@@ -2977,7 +3004,7 @@ function showStarredProjectView() {
         }
 
         // --- Quiz Generation (Admin) ---
-        const mathPromptInstruction = "กฎเหล็ก: นิพจน์ทางคณิตศาสตร์ทั้งหมดต้องอยู่ในรูปแบบ LaTeX ที่ถูกต้อง และต้องถูกห่อหุ้มด้วยเครื่องหมายดอลลาร์ ($) เพียงคู่เดียว ตัวอย่างเช่น 'ผลลัพธ์ของ $3^2 \\times 3^4$ คืออะไร' หรือ 'คำตอบคือ $3^{2+4} = 3^6$' กฎเพิ่มเติม: 1. ใช้ `\\times` สำหรับการคูณ และ `\\div` สำหรับการหารเสมอ ห้ามใช้คำอื่น 2. ตรวจสอบให้แน่ใจว่าวงเล็บปีกกา `{}` ทั้งหมดมีการเปิดและปิดที่ถูกต้อง 3. ห้ามใส่เครื่องหมายดอลลาร์ซ้อนกันหรือครอบแต่ละสัญลักษณ์เด็ดขาด ให้ครอบทั้งนิพจน์เท่านั้น";
+        const mathPromptInstruction = "กฎเหล็ก: นิพจน์ทางคณิตศาสตร์ทั้งหมดต้องอยู่ในรูปแบบ LaTeX ที่ถูกต้อง และต้องถูกห่อหุ้มด้วยเครื่องหมายดอลลาร์ ($) เพียงคู่เดียว ตัวอย่างเช่น 'ผลลัพธ์ของ $3^2 \\times 3^4$ คืออะไร' หรือ 'คำตอบคือ $3^{2+4} = 3^6$' กฎเพิ่มเติม: 1. ใช้ `\\times` สำหรับการคูณ และ `\\div` สำหรับการหารเสมอ ห้ามใช้คำอื่น 2. ตรวจสอบให้แน่ใจว่าวงเล็บปีกกา `{}` ทั้งหมดมีการเปิดและปิดที่ถูกต้อง 3. ห้ามใส่เครื่องหมายดอลลาร์ซ้อนกันหรือครอบแต่ละสัญลักษณ์เด็ดขาด ให้ครอบทั้งนิพจน์เท่านั้น 4. สิ่งสำคัญที่สุด: ก่อนจะจบการสร้างคำตอบ ให้ตรวจสอบทุกครั้งว่านิพจน์คณิตศาสตร์ทั้งหมดถูกครอบด้วยเครื่องหมาย $...$ เรียบร้อยแล้ว";
 
 async function handleGenerateFromLink() {
     const urlInput = document.getElementById('link-url-input');
