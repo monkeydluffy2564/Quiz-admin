@@ -322,6 +322,12 @@
                                     <!-- Topic Input -->
                                     <div id="topic-input-area" class="space-y-4">
                                         <input type="text" id="topic-input" class="w-full p-3 border border-gray-300 rounded-lg" placeholder="เช่น ทฤษฎีบทพีทาโกรัส">
+										<div class="flex items-center my-3">
+        <input id="force-math-checkbox" type="checkbox" class="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500">
+        <label for="force-math-checkbox" class="ml-2 block text-sm text-gray-900">
+            บังคับเป็นโจทย์คณิตศาสตร์ (ไม่ว่าจะพิมพ์หัวข้ออะไร)
+        </label>
+    </div>
                                         <button id="generate-from-topic-btn" class="w-full bg-indigo-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-indigo-700 flex items-center justify-center"><i class="fas fa-cogs mr-2"></i>สร้างแบบทดสอบ</button>
                                     </div>
                                     <!-- Text Input -->
@@ -3146,6 +3152,11 @@ function extractTextFromHtml(htmlString) {
     const numQuestions = document.getElementById('num-questions').value;
     const numChoices = document.getElementById('num-choices').value;
 
+    // --- [เพิ่มเข้ามา] อ่านค่าจาก Checkbox ---
+    const isMathForced = document.getElementById('force-math-checkbox').checked;
+    const subjectPrefix = isMathForced ? "คณิตศาสตร์" : "";
+    // --- สิ้นสุดส่วนที่เพิ่ม ---
+
     let prompt = "";
     let loadingMessage = "";
     let schema;
@@ -3193,13 +3204,13 @@ function extractTextFromHtml(htmlString) {
         const imageInstruction = includeImages ? `สำหรับคำถามนี้ หากจำเป็นต้องมีรูปภาพประกอบ (เช่น รูปเรขาคณิต) ให้สร้างโค้ด SVG ที่สมบูรณ์สำหรับรูปนั้นๆ แล้วใส่ไว้ใน property ชื่อ "imageCode".` : '';
 
         if(originalQuestionType === 'multiple_choice') {
-            prompt = `สร้างแบบทดสอบปรนัย 1 ข้อ ${topicInstruction}. ให้มี ${numChoices} ตัวเลือก, ระบุคำตอบที่ถูกต้อง, และเพิ่มคำอธิบายสั้นๆ. ${imageInstruction} ${simpleMathPrompt}`;
+            prompt = `สร้างแบบทดสอบปรนัย${subjectPrefix} 1 ข้อ ${topicInstruction}. ให้มี ${numChoices} ตัวเลือก, ระบุคำตอบที่ถูกต้อง, และเพิ่มคำอธิบายสั้นๆ. ${imageInstruction} ${simpleMathPrompt}`;
             schema = mcqSchema;
         } else if (originalQuestionType === 'matching_item') {
-            prompt = `จากหัวข้อ ${topicInstruction} สร้างคำถามจับคู่ 1 ข้อ (1 คู่) ที่อยู่ในหมวดหมู่เดียวกันกับคำถามเดิม แต่ต้องแตกต่างออกไป. รูปแบบคือ: stem, correctResponse, และ explanation. ${imageInstruction} ${simpleMathPrompt}`;
+            prompt = `จากหัวข้อ ${topicInstruction} สร้างคำถามจับคู่${subjectPrefix} 1 ข้อ (1 คู่) ที่อยู่ในหมวดหมู่เดียวกันกับคำถามเดิม แต่ต้องแตกต่างออกไป. รูปแบบคือ: stem, correctResponse, และ explanation. ${imageInstruction} ${simpleMathPrompt}`;
             schema = { type: "OBJECT", properties: { questionType: { type: "STRING", "enum": ["matching_item"] }, stem: { type: "STRING" }, correctResponse: { type: "STRING" }, explanation: { type: "STRING" }, imageCode: { type: "STRING" } }, required: ["questionType", "stem", "correctResponse", "explanation"] };
         } else { // short_answer
-            prompt = `สร้างคำถามแบบเติมคำในช่องว่าง 1 ข้อ ${topicInstruction}. แต่ละข้อต้องมีคำถาม (questionText), คำตอบที่เหมาะสม (idealAnswer), และคำอธิบาย (explanation). ${imageInstruction} ${simpleMathPrompt}`;
+            prompt = `สร้างคำถามแบบเติมคำในช่องว่าง${subjectPrefix} 1 ข้อ ${topicInstruction}. แต่ละข้อต้องมีคำถาม (questionText), คำตอบที่เหมาะสม (idealAnswer), และคำอธิบาย (explanation). ${imageInstruction} ${simpleMathPrompt}`;
             schema = shortAnswerSchema;
         }
         finalSchema = schema;
@@ -3208,27 +3219,33 @@ function extractTextFromHtml(htmlString) {
 
         switch (quizType) {
             case 'multiple_choice':
-                prompt = `สร้างแบบทดสอบปรนัย ${numQuestions} ข้อ ${topicInstruction}. แต่ละข้อมี ${numChoices} ตัวเลือก, ระบุคำตอบที่ถูกต้อง, และเพิ่มคำอธิบายสั้นๆ. ${imageInstruction} ${simpleMathPrompt}`;
+                // --- [แก้ไข] เพิ่ม subjectPrefix ---
+                prompt = `สร้างแบบทดสอบปรนัย${subjectPrefix} ${numQuestions} ข้อ ${topicInstruction}. แต่ละข้อมี ${numChoices} ตัวเลือก, ระบุคำตอบที่ถูกต้อง, และเพิ่มคำอธิบายสั้นๆ. ${imageInstruction} ${simpleMathPrompt}`;
                 schema = mcqSchema;
                 break;
             case 'fill_in_with_choices':
-                prompt = `สร้างคำถามแบบเติมคำในช่องว่าง ${numQuestions} ข้อ ${topicInstruction}. แต่ละข้อต้องมีประโยคคำถามที่มีช่องว่าง (questionText containing '.....'), ตัวเลือก ${numChoices} ตัว (options), ดัชนีคำตอบที่ถูกต้อง (correctAnswerIndex), และคำอธิบาย (explanation). ${imageInstruction} ${simpleMathPrompt}`;
+                // --- [แก้ไข] เพิ่ม subjectPrefix ---
+                prompt = `สร้างคำถามแบบเติมคำในช่องว่าง${subjectPrefix} ${numQuestions} ข้อ ${topicInstruction}. แต่ละข้อต้องมีประโยคคำถามที่มีช่องว่าง (questionText containing '.....'), ตัวเลือก ${numChoices} ตัว (options), ดัชนีคำตอบที่ถูกต้อง (correctAnswerIndex), และคำอธิบาย (explanation). ${imageInstruction} ${simpleMathPrompt}`;
                 schema = mcqSchema;
                 break;
             case 'fill_in_no_choices':
-                prompt = `สร้างคำถามแบบเติมคำในช่องว่าง ${numQuestions} ข้อ ${topicInstruction}. แต่ละข้อต้องมีคำถาม (questionText containing '.....'), คำตอบที่เหมาะสม (idealAnswer), และคำอธิบาย (explanation). ${imageInstruction} ${simpleMathPrompt}`;
+                // --- [แก้ไข] เพิ่ม subjectPrefix ---
+                prompt = `สร้างคำถามแบบเติมคำในช่องว่าง${subjectPrefix} ${numQuestions} ข้อ ${topicInstruction}. แต่ละข้อต้องมีคำถาม (questionText containing '.....'), คำตอบที่เหมาะสม (idealAnswer), และคำอธิบาย (explanation). ${imageInstruction} ${simpleMathPrompt}`;
                 schema = shortAnswerSchema;
                 break;
             case 'mixed':
-                prompt = `สร้างแบบทดสอบ ${numQuestions} ข้อ ${topicInstruction}, โดยให้มีทั้งคำถามแบบปรนัย (questionType: 'multiple_choice') และแบบเติมคำที่ให้พิมพ์ตอบเอง (questionType: 'short_answer') คละกันไป. สำหรับปรนัย ให้มี ${numChoices} ตัวเลือก. ${imageInstruction} ${simpleMathPrompt}. For each question, specify its 'questionType'. If 'questionType' is 'multiple_choice', provide 'options' and 'correctAnswerIndex'. If 'questionType' is 'short_answer', provide 'idealAnswer'.`;
+                // --- [แก้ไข] เพิ่ม subjectPrefix ---
+                prompt = `สร้างแบบทดสอบ${subjectPrefix} ${numQuestions} ข้อ ${topicInstruction}, โดยให้มีทั้งคำถามแบบปรนัย (questionType: 'multiple_choice') และแบบเติมคำที่ให้พิมพ์ตอบเอง (questionType: 'short_answer') คละกันไป. สำหรับปรนัย ให้มี ${numChoices} ตัวเลือก. ${imageInstruction} ${simpleMathPrompt}. For each question, specify its 'questionType'. If 'questionType' is 'multiple_choice', provide 'options' and 'correctAnswerIndex'. If 'questionType' is 'short_answer', provide 'idealAnswer'.`;
                 schema = mixedQuestionSchema;
                 break;
             case 'true_false':
-                prompt = `สร้างคำถามแบบใช่/ไม่ใช่ ${numQuestions} ข้อ ${topicInstruction}. แต่ละข้อต้องมีคำถาม (questionText), คำตอบที่ถูกต้อง (correctAnswer เป็น true หรือ false), และคำอธิบาย (explanation). ${imageInstruction} ${simpleMathPrompt}`;
+                // --- [แก้ไข] เพิ่ม subjectPrefix ---
+                prompt = `สร้างคำถามแบบใช่/ไม่ใช่${subjectPrefix} ${numQuestions} ข้อ ${topicInstruction}. แต่ละข้อต้องมีคำถาม (questionText), คำตอบที่ถูกต้อง (correctAnswer เป็น true หรือ false), และคำอธิบาย (explanation). ${imageInstruction} ${simpleMathPrompt}`;
                 schema = trueFalseSchema;
                 break;
             case 'matching':
-                prompt = `สร้างชุดคำถามจับคู่ ${numQuestions} คู่ ${topicInstruction}. สำหรับแต่ละคู่ ให้สร้างเป็น JSON object แยกกัน โดยแต่ละ object ต้องมี: 'questionType' (ตั้งค่าเป็น 'matching_item'), 'stem' (คำถามฝั่งซ้าย), 'correctResponse' (คำตอบที่ถูกต้องฝั่งขวา), และ 'explanation'. นอกจากนี้ ให้สร้าง key ชื่อ 'allResponses' ซึ่งเป็น array ที่รวบรวม 'correctResponse' ทั้งหมด ${numQuestions} รายการ เพื่อใช้เป็นตัวเลือกใน dropdown. ${imageInstruction} ${simpleMathPrompt}`;
+                // --- [แก้ไข] เพิ่ม subjectPrefix ---
+                prompt = `สร้างชุดคำถามจับคู่${subjectPrefix} ${numQuestions} คู่ ${topicInstruction}. สำหรับแต่ละคู่ ให้สร้างเป็น JSON object แยกกัน โดยแต่ละ object ต้องมี: 'questionType' (ตั้งค่าเป็น 'matching_item'), 'stem' (คำถามฝั่งซ้าย), 'correctResponse' (คำตอบที่ถูกต้องฝั่งขวา), และ 'explanation'. นอกจากนี้ ให้สร้าง key ชื่อ 'allResponses' ซึ่งเป็น array ที่รวบรวม 'correctResponse' ทั้งหมด ${numQuestions} รายการ เพื่อใช้เป็นตัวเลือกใน dropdown. ${imageInstruction} ${simpleMathPrompt}`;
                 schema = matchingItemSchema;
                 break;
         }
