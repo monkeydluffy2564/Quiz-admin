@@ -331,10 +331,15 @@
                                     </div>
                                     <!-- File Input -->
                                     <div id="file-input-area" class="hidden space-y-4">
-                                        <label for="file-upload-input" class="block text-sm font-medium text-gray-700">เลือกไฟล์ PDF หรือ Word (.docx):</label>
-                                        <input type="file" id="file-upload-input" class="w-full p-2 border border-gray-300 rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" accept=".pdf,.docx">
-                                        <p class="text-xs text-gray-500">ไฟล์จะถูกประมวลผลในเบราว์เซอร์ของคุณ ไม่มีการอัปโหลดขึ้นเซิร์ฟเวอร์</p>
-                                    </div>
+    <label for="file-upload-input" class="block text-sm font-medium text-gray-700">เลือกไฟล์ PDF หรือ Word (.docx):</label>
+    <input type="file" id="file-upload-input" class="w-full p-2 border border-gray-300 rounded-lg file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-indigo-50 file:text-indigo-700 hover:file:bg-indigo-100" accept=".pdf,.docx">
+    <input type="text" id="file-topic-input" class="w-full p-3 border border-gray-300 rounded-lg" placeholder="ระบุหัวข้อ (เพื่อความแม่นยำ)...">
+    <p class="text-xs text-gray-500">ไฟล์จะถูกประมวลผลในเบราว์เซอร์ของคุณ ไม่มีการอัปโหลดขึ้นเซิร์ฟเวอร์</p>
+
+    <button id="generate-from-file-btn" class="w-full bg-indigo-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-indigo-700 flex items-center justify-center disabled:bg-gray-400 disabled:cursor-not-allowed" disabled>
+        <i class="fas fa-cogs mr-2"></i>สร้างแบบทดสอบ
+    </button>
+</div>
                                     <!-- Link Input -->
                                     <div id="link-input-area" class="hidden space-y-4">
                                         <input type="url" id="link-url-input" class="w-full p-3 border border-gray-300 rounded-lg" placeholder="วาง URL ของบทความที่นี่...">
@@ -405,7 +410,7 @@
     <h2 id="results-quiz-title" class="text-3xl font-bold text-indigo-700 mb-2"></h2>
     <p class="text-sm text-gray-500 mb-4">Quiz ID: <span id="results-quiz-id-display" class="font-mono"></span></p>
 
-                    <h2 id="results-quiz-title" class="text-3xl font-bold text-indigo-700 mb-2"></h2>
+                    
 
                        <!-- Quiz Detail Tabs -->
                     <div class="border-b border-gray-200 mb-6">
@@ -878,6 +883,7 @@ let quizLeaderboardSortOrder = 'desc'; // ทิศทางการจัด�
         let unsubscribeStudentProfilesListener = null; // For Leaderboard
         let confirmAction = null;
         let actionTargetId = null; // Used for rename/move/timer actions
+		let selectedFile = null; //  <-- เพิ่มบรรทัดนี้เข้ามา
         let draggedSvgElement = null; // สำหรับเก็บ element ที่กำลังถูกลาก
         let svgOffset = { x: 0, y: 0 }; // สำหรับเก็บระยะห่างระหว่างเมาส์/นิ้วกับมุมของ element
         // Timer-related state
@@ -2250,77 +2256,77 @@ function renderGlobalQuizList(filterText = '') {
 
 
             // Event delegation for project quizzes list
-            projectQuizzesList.addEventListener('click', async (e) => {
-                const starBtn = e.target.closest('.star-quiz-btn');
-                const deleteBtn = e.target.closest('.delete-quiz-btn');
-                const copyBtn = e.target.closest('.copy-quiz-id-list-btn');
-                const presentBtn = e.target.closest('.start-presentation-list-btn');
-                const tryQuizBtn = e.target.closest('.admin-try-quiz-list-btn');
-                const renameBtn = e.target.closest('.rename-quiz-btn');
-                const moveBtn = e.target.closest('.move-quiz-btn');
-                const settingsBtn = e.target.closest('.quiz-settings-btn');
-                const statusBtn = e.target.closest('.quiz-status-btn');
-                const duplicateBtn = e.target.closest('.duplicate-quiz-btn');
-                const liveRaceBtn = e.target.closest('.start-live-race-btn'); // NEW
-				const editBtn = e.target.closest('.edit-quiz-btn'); // <-- เพิ่มบรรทัดนี้เข้ามา
-				
-				if (editBtn) {
-    const quizId = editBtn.dataset.quizId;
-    handleOpenQuizEditor(quizId);
-                } else if (starBtn) {
-                    const quizId = starBtn.dataset.quizId;
-                    handleToggleStarQuiz(quizId);
-                } else if (liveRaceBtn) {
-                    const quizId = liveRaceBtn.dataset.quizId;
-                    handleStartLiveRace(quizId);
-                } else if (deleteBtn) {
-                    const quizId = deleteBtn.dataset.quizId;
-                    const quizTopic = deleteBtn.dataset.topic;
-                      showConfirmation(
-                        `คุณแน่ใจหรือไม่ว่าต้องการลบแบบทดสอบ "${quizTopic}"? ผลการส่งงานทั้งหมดของแบบทดสอบนี้จะถูกลบอย่างถาวร`,
-                        () => handleDeleteQuiz(quizId)
-                    );
-                } else if (copyBtn) {
-                    const quizId = copyBtn.dataset.quizId;
-                    copyTextToClipboard(quizId, "คัดลอกรหัสแล้ว!");
-                } else if (presentBtn) {
-                    const quizId = presentBtn.dataset.quizId;
-                    const quizDocRef = doc(db, `artifacts/${appId}/public/data/quizzes`, quizId);
-                    const quizDocSnap = await getDoc(quizDocRef);
-                    if (quizDocSnap.exists()) {
-                        const sanitizedData = sanitizeQuizData({ id: quizDocSnap.id, ...quizDocSnap.data() });
-                        startPresentation(sanitizedData);
-                    } else {
-                        showMessage("ไม่พบข้อมูลแบบทดสอบ");
-                    }
-                } else if (tryQuizBtn) {
-                    const quizId = tryQuizBtn.dataset.quizId;
-                    const quizDocRef = doc(db, `artifacts/${appId}/public/data/quizzes`, quizId);
-                    const quizDocSnap = await getDoc(quizDocRef);
-                    if (quizDocSnap.exists()) {
-                        currentQuizData = sanitizeQuizData({id: quizDocSnap.id, ...quizDocSnap.data()}); // Set the global quiz data
-                        startAdminTest();
-                    } else {
-                        showMessage("ไม่พบข้อมูลแบบทดสอบ");
-                    }
-                } else if (renameBtn) {
-                    const quizId = renameBtn.dataset.quizId;
-                    const topic = renameBtn.dataset.topic;
-                    handleRenameQuiz(quizId, topic);
-                } else if (moveBtn) {
-                    const quizId = moveBtn.dataset.quizId;
-                    handleMoveQuiz(quizId);
-                } else if (settingsBtn) {
-                    const quizId = settingsBtn.dataset.quizId;
-                    handleQuizSettings(quizId);
-                } else if (statusBtn) {
-                    const quizId = statusBtn.dataset.quizId;
-                    handleQuizStatus(quizId);
-                } else if (duplicateBtn) {
-                    const quizId = duplicateBtn.dataset.quizId;
-                    handleDuplicateQuiz(quizId);
-                }
-            });
+projectQuizzesList.addEventListener('click', async (e) => {
+    const starBtn = e.target.closest('.star-quiz-btn');
+    const deleteBtn = e.target.closest('.delete-quiz-btn');
+    const copyBtn = e.target.closest('.copy-quiz-id-list-btn');
+    const presentBtn = e.target.closest('.start-presentation-list-btn');
+    const tryQuizBtn = e.target.closest('.admin-try-quiz-list-btn');
+    const renameBtn = e.target.closest('.rename-quiz-btn');
+    const moveBtn = e.target.closest('.move-quiz-btn');
+    const settingsBtn = e.target.closest('.quiz-settings-btn');
+    const statusBtn = e.target.closest('.quiz-status-btn');
+    const duplicateBtn = e.target.closest('.duplicate-quiz-btn');
+    const liveRaceBtn = e.target.closest('.start-live-race-btn'); // NEW
+    const editBtn = e.target.closest('.edit-quiz-btn'); // <-- เพิ่มบรรทัดนี้เข้ามา
+    
+    if (editBtn) {
+        const quizId = editBtn.dataset.quizId;
+        handleOpenQuizEditor(quizId);
+    } else if (starBtn) {
+        const quizId = starBtn.dataset.quizId;
+        handleToggleStarQuiz(quizId);
+    } else if (liveRaceBtn) {
+        const quizId = liveRaceBtn.dataset.quizId;
+        handleStartLiveRace(quizId);
+    } else if (deleteBtn) {
+        const quizId = deleteBtn.dataset.quizId;
+        const quizTopic = deleteBtn.dataset.topic;
+            showConfirmation(
+            `คุณแน่ใจหรือไม่ว่าต้องการลบแบบทดสอบ "${quizTopic}"? ผลการส่งงานทั้งหมดของแบบทดสอบนี้จะถูกลบอย่างถาวร`,
+            () => handleDeleteQuiz(quizId)
+        );
+    } else if (copyBtn) {
+        const quizId = copyBtn.dataset.quizId;
+        copyTextToClipboard(quizId, "คัดลอกรหัสแล้ว!");
+    } else if (presentBtn) {
+        const quizId = presentBtn.dataset.quizId;
+        const quizDocRef = doc(db, `artifacts/${appId}/public/data/quizzes`, quizId);
+        const quizDocSnap = await getDoc(quizDocRef);
+        if (quizDocSnap.exists()) {
+            const quizData = { id: quizDocSnap.id, ...quizDocSnap.data() };
+            startPresentation(quizData);
+        } else {
+            showMessage("ไม่พบข้อมูลแบบทดสอบ");
+        }
+    } else if (tryQuizBtn) {
+        const quizId = tryQuizBtn.dataset.quizId;
+        const quizDocRef = doc(db, `artifacts/${appId}/public/data/quizzes`, quizId);
+        const quizDocSnap = await getDoc(quizDocRef);
+        if (quizDocSnap.exists()) {
+            currentQuizData = {id: quizDocSnap.id, ...quizDocSnap.data()}; // Set the global quiz data
+            startAdminTest();
+        } else {
+            showMessage("ไม่พบข้อมูลแบบทดสอบ");
+        }
+    } else if (renameBtn) {
+        const quizId = renameBtn.dataset.quizId;
+        const topic = renameBtn.dataset.topic;
+        handleRenameQuiz(quizId, topic);
+    } else if (moveBtn) {
+        const quizId = moveBtn.dataset.quizId;
+        handleMoveQuiz(quizId);
+    } else if (settingsBtn) {
+        const quizId = settingsBtn.dataset.quizId;
+        handleQuizSettings(quizId);
+    } else if (statusBtn) {
+        const quizId = statusBtn.dataset.quizId;
+        handleQuizStatus(quizId);
+    } else if (duplicateBtn) {
+        const quizId = duplicateBtn.dataset.quizId;
+        handleDuplicateQuiz(quizId);
+    }
+});
 			
 			// --- เพิ่มโค้ดส่วนนี้เข้าไปทั้งหมด ---
 document.getElementById('quiz-leaderboard-table').querySelector('thead').addEventListener('click', (e) => {
@@ -2373,7 +2379,23 @@ document.getElementById('quiz-leaderboard-table').querySelector('thead').addEven
                 }
             });
             
-            fileUploadInput.addEventListener('change', handleFileUpload);
+            // --- โค้ดใหม่สำหรับจัดการการเลือกไฟล์และคลิกปุ่ม ---
+
+// 1. เพิ่ม Listener ให้กับปุ่ม "สร้างแบบทดสอบ" ใหม่ของเรา
+document.getElementById('generate-from-file-btn').addEventListener('click', handleGenerateFromFileClick);
+
+// 2. เปลี่ยน Listener ของช่องเลือกไฟล์ ให้ทำงานแค่เก็บไฟล์และเปิด/ปิดปุ่ม
+fileUploadInput.addEventListener('change', (event) => {
+    const file = event.target.files[0];
+    const generateBtn = document.getElementById('generate-from-file-btn');
+    if (file) {
+        selectedFile = file; // เก็บไฟล์ที่เลือกลงในตัวแปร
+        generateBtn.disabled = false; // เปิดใช้งานปุ่ม
+    } else {
+        selectedFile = null; // ถ้าไม่มีไฟล์ ให้ล้างค่า
+        generateBtn.disabled = true; // ปิดใช้งานปุ่ม
+    }
+});
 
             // Timer Settings Listener
             document.getElementById('timer-mode-select').addEventListener('change', (e) => {
@@ -2487,21 +2509,23 @@ document.getElementById('quiz-leaderboard-table').querySelector('thead').addEven
         function handleAdminLogin() {
             const passInput = document.getElementById('admin-password-input');
             const errorMsg = document.getElementById('password-error-msg');
-            
-            // --- โค้ดส่วนที่แก้ไข ---
-            // เราได้ลบเงื่อนไข if-else ที่ตรวจสอบรหัสผ่านออกไป
-            // ทำให้โค้ดส่วนนี้ทำงานทันทีที่ฟังก์ชันถูกเรียก
-            adminPasswordModal.classList.add('hidden');
-            passInput.value = '';
-            errorMsg.classList.add('hidden');
-            
-            // Update mode and button
-            currentMode = 'admin';
-            const switcherBtn = document.getElementById('mode-switcher-btn');
-            switcherBtn.innerHTML = `<i class="fas fa-user-graduate fa-lg"></i>`;
-            switcherBtn.title = "สลับไปโหมดนักเรียน";
-            
-            showView('admin-dashboard');
+            // This is a simple, non-secure password. In a real app, use a proper auth system.
+            if (passInput.value === '2741') {
+                adminPasswordModal.classList.add('hidden');
+                passInput.value = '';
+                errorMsg.classList.add('hidden');
+                
+                // Update mode and button
+                currentMode = 'admin';
+                const switcherBtn = document.getElementById('mode-switcher-btn');
+                switcherBtn.innerHTML = `<i class="fas fa-user-graduate fa-lg"></i>`;
+                switcherBtn.title = "สลับไปโหมดนักเรียน";
+                
+                showView('admin-dashboard');
+            } else {
+                errorMsg.classList.remove('hidden');
+                passInput.value = '';
+            }
         }
 
         function switchProjectTab(tabName) {
@@ -2913,36 +2937,32 @@ function showStarredProjectView() {
         }
 
         // --- File Handling ---
-        async function handleFileUpload(event) {
-    const file = event.target.files[0];
-    if (!file) return;
-
-    // ตรวจสอบประเภทไฟล์ที่รองรับ
-    if (file.type !== "application/pdf" && !file.name.endsWith('.docx')) {
-        showMessage("รูปแบบไฟล์ไม่รองรับ กรุณาเลือก PDF หรือ .docx");
-        event.target.value = ''; // รีเซ็ต input
+        // ฟังก์ชันใหม่ที่จะทำงานเมื่อคลิกปุ่ม "สร้างแบบทดสอบ" จากไฟล์
+async function handleGenerateFromFileClick() {
+    if (!selectedFile) {
+        showMessage("กรุณาเลือกไฟล์ก่อน");
         return;
     }
 
     const loader = document.getElementById('loader');
     const loaderText = document.getElementById('loader-text');
     const genQuizContainer = document.getElementById('generated-quiz-container');
+    const generateBtn = document.getElementById('generate-from-file-btn');
     
     // แสดงสถานะกำลังโหลด
+    generateBtn.disabled = true;
     document.getElementById('quiz-generation-area').classList.remove('hidden');
     genQuizContainer.innerHTML = '';
     loader.classList.remove('hidden');
     loaderText.textContent = 'กำลังอ่านและเตรียมไฟล์...';
     
-    // ใช้ FileReader เพื่อแปลงไฟล์เป็น Base64
     const reader = new FileReader();
-    reader.readAsDataURL(file);
+    reader.readAsDataURL(selectedFile);
     reader.onload = async () => {
         try {
-            const base64String = reader.result.split(',')[1]; // แยกเอาเฉพาะข้อมูล base64
-            const mimeType = file.type;
+            const base64String = reader.result.split(',')[1];
+            const mimeType = selectedFile.type;
             
-            // ส่งข้อมูลไฟล์ไปให้ AI สร้างแบบทดสอบ
             await generateQuizFromFile(mimeType, base64String);
 
         } catch (error) {
@@ -2950,14 +2970,14 @@ function showStarredProjectView() {
             showMessage(`เกิดข้อผิดพลาดในการเตรียมไฟล์: ${error.message}`);
             loader.classList.add('hidden');
         } finally {
-            // รีเซ็ต input เพื่อให้สามารถเลือกไฟล์เดิมซ้ำได้
-            event.target.value = '';
+            // ไม่ต้องรีเซ็ตปุ่มที่นี่ เพราะการทำงานเสร็จสิ้นแล้ว
         }
     };
     reader.onerror = (error) => {
         console.error("FileReader error:", error);
         showMessage("เกิดข้อผิดพลาดในการอ่านไฟล์");
         loader.classList.add('hidden');
+        generateBtn.disabled = false; // เปิดปุ่มอีกครั้งหากอ่านไฟล์ไม่สำเร็จ
     };
 }
 
@@ -3003,6 +3023,15 @@ function autoFormatMath(text) {
     }
 
     // --- เพิ่มโค้ดบรรทัดนี้เข้าไป ---
+    // Normalize inline-tag math tokens and symbols before MathJax
+    sanitizedText = sanitizedText
+        .replace(/<(i|em)>\s*div\s*<\/\1>/gi, '\\div')
+        .replace(/<(i|em)>\s*times\s*<\/\1>/gi, '\\times')
+        .replace(/÷/g, '\\div')
+        .replace(/×/g, '\\times');
+		
+		sanitizedText = sanitizedText.replace(/(\d)(\\frac)/g, '$1 \\frac');
+
     sanitizedText = autoFormatMath(sanitizedText);
 
     return sanitizedText;
@@ -3035,7 +3064,7 @@ function autoFormatMath(text) {
         }
 
         // --- Quiz Generation (Admin) ---
-        const mathPromptInstruction = "กฎเหล็ก: นิพจน์ทางคณิตศาสตร์ทั้งหมดต้องอยู่ในรูปแบบ LaTeX ที่ถูกต้อง และต้องถูกห่อหุ้มด้วยเครื่องหมายดอลลาร์ ($) เพียงคู่เดียว ตัวอย่างเช่น 'ผลลัพธ์ของ $3^2 \\times 3^4$ คืออะไร' หรือ 'คำตอบคือ $3^{2+4} = 3^6$' กฎเพิ่มเติม: 1. ใช้ `\\times` สำหรับการคูณ และ `\\div` สำหรับการหารเสมอ ห้ามใช้คำอื่น 2. ตรวจสอบให้แน่ใจว่าวงเล็บปีกกา `{}` ทั้งหมดมีการเปิดและปิดที่ถูกต้อง 3. ห้ามใส่เครื่องหมายดอลลาร์ซ้อนกันหรือครอบแต่ละสัญลักษณ์เด็ดขาด ให้ครอบทั้งนิพจน์เท่านั้น 4. สิ่งสำคัญที่สุด: ก่อนจะจบการสร้างคำตอบ ให้ตรวจสอบทุกครั้งว่านิพจน์คณิตศาสตร์ทั้งหมดถูกครอบด้วยเครื่องหมาย $...$ เรียบร้อยแล้ว";
+        const simpleMathPrompt = "กฎเหล็ก: นิพจน์ทางคณิตศาสตร์ทั้งหมดต้องอยู่ในรูปแบบ LaTeX ที่ถูกต้อง และต้องถูกห่อหุ้มด้วยเครื่องหมายดอลลาร์ ($) เพียงคู่เดียว";
 
 async function handleGenerateFromLink() {
     const urlInput = document.getElementById('link-url-input');
@@ -3112,111 +3141,114 @@ function extractTextFromHtml(htmlString) {
         });
 
         async function generateQuiz(topic, textContent, singleQuestionIndex = null) {
-            const includeImages = document.getElementById('include-images-checkbox').checked;
-            const quizType = document.getElementById('quiz-type-select').value;
-            const numQuestions = document.getElementById('num-questions').value;
-            const numChoices = document.getElementById('num-choices').value;
+    const includeImages = document.getElementById('include-images-checkbox').checked;
+    const quizType = document.getElementById('quiz-type-select').value;
+    const numQuestions = document.getElementById('num-questions').value;
+    const numChoices = document.getElementById('num-choices').value;
 
-            let prompt = "";
-            let loadingMessage = "";
-            let schema;
+    let prompt = "";
+    let loadingMessage = "";
+    let schema;
 
-            // --- Logic ใหม่สำหรับสร้างคำสั่งเกี่ยวกับหัวข้อแบบไดนามิก ---
-            let topicInstruction = `เกี่ยวกับหัวข้อ "${topic}"`;
-            if (!topic && textContent) {
-                topicInstruction = "โดยให้ AI วิเคราะห์หาหัวข้อหลักจากเนื้อหาที่ให้มาโดยอัตโนมัติ";
-            } else if (!topic && !textContent) {
-                topicInstruction = "เกี่ยวกับหัวข้อ 'ความรู้ทั่วไป'"; // กรณีฉุกเฉิน
-            }
-            
-            // Define base schemas
-            const mcqSchema = {
-                type: "OBJECT",
-                properties: { questionText: { type: "STRING" }, options: { type: "ARRAY", items: { type: "STRING" } }, correctAnswerIndex: { type: "NUMBER" }, explanation: { type: "STRING" }, imageCode: { type: "STRING" } },
-                required: ["questionText", "options", "correctAnswerIndex", "explanation"]
-            };
-            const shortAnswerSchema = {
-                type: "OBJECT",
-                properties: { questionText: { type: "STRING" }, idealAnswer: { type: "STRING" }, explanation: { type: "STRING" }, imageCode: { type: "STRING" } },
-                required: ["questionText", "idealAnswer", "explanation"]
-            };
-            const mixedQuestionSchema = {
-                type: "OBJECT",
-                properties: { questionText: { "type": "STRING" }, questionType: { "type": "STRING", "enum": ["multiple_choice", "short_answer"] }, options: { type: "ARRAY", items: { type: "STRING" } }, correctAnswerIndex: { type: "NUMBER" }, idealAnswer: { type: "STRING" }, explanation: { type: "STRING" }, imageCode: { type: "STRING" } },
-                required: ["questionText", "questionType", "explanation"]
-            };
-            const trueFalseSchema = {
-                type: "OBJECT",
-                properties: { questionText: { type: "STRING" }, correctAnswer: { type: "BOOLEAN" }, explanation: { type: "STRING" }, imageCode: { type: "STRING" } },
-                required: ["questionText", "correctAnswer", "explanation"]
-            };
-            const matchingItemSchema = {
-                type: "OBJECT",
-                properties: { questionType: { type: "STRING", "enum": ["matching_item"] }, stem: { type: "STRING" }, correctResponse: { type: "STRING" }, allResponses: { type: "ARRAY", items: { type: "STRING" } }, explanation: { type: "STRING" }, imageCode: { type: "STRING" } },
-                required: ["questionType", "stem", "correctResponse", "allResponses", "explanation"]
-            };
+    // --- Logic ใหม่สำหรับสร้างคำสั่งเกี่ยวกับหัวข้อแบบไดนามิก ---
+    let topicInstruction = `เกี่ยวกับหัวข้อ "${topic}"`;
+    if (!topic && textContent) {
+        topicInstruction = "โดยให้ AI วิเคราะห์หาหัวข้อหลักจากเนื้อหาที่ให้มาโดยอัตโนมัติ";
+    } else if (!topic && !textContent) {
+        topicInstruction = "เกี่ยวกับหัวข้อ 'ความรู้ทั่วไป'"; // กรณีฉุกเฉิน
+    }
+    
+    // Define base schemas
+    const mcqSchema = {
+        type: "OBJECT",
+        properties: { questionText: { type: "STRING" }, options: { type: "ARRAY", items: { type: "STRING" } }, correctAnswerIndex: { type: "NUMBER" }, explanation: { type: "STRING" }, imageCode: { type: "STRING" } },
+        required: ["questionText", "options", "correctAnswerIndex", "explanation"]
+    };
+    const shortAnswerSchema = {
+        type: "OBJECT",
+        properties: { questionText: { type: "STRING" }, idealAnswer: { type: "STRING" }, explanation: { type: "STRING" }, imageCode: { type: "STRING" } },
+        required: ["questionText", "idealAnswer", "explanation"]
+    };
+    const mixedQuestionSchema = {
+        type: "OBJECT",
+        properties: { questionText: { "type": "STRING" }, questionType: { "type": "STRING", "enum": ["multiple_choice", "short_answer"] }, options: { type: "ARRAY", items: { type: "STRING" } }, correctAnswerIndex: { type: "NUMBER" }, idealAnswer: { type: "STRING" }, explanation: { type: "STRING" }, imageCode: { type: "STRING" } },
+        required: ["questionText", "questionType", "explanation"]
+    };
+    const trueFalseSchema = {
+        type: "OBJECT",
+        properties: { questionText: { type: "STRING" }, correctAnswer: { type: "BOOLEAN" }, explanation: { type: "STRING" }, imageCode: { type: "STRING" } },
+        required: ["questionText", "correctAnswer", "explanation"]
+    };
+    const matchingItemSchema = {
+        type: "OBJECT",
+        properties: { questionType: { type: "STRING", "enum": ["matching_item"] }, stem: { type: "STRING" }, correctResponse: { type: "STRING" }, allResponses: { type: "ARRAY", items: { type: "STRING" } }, explanation: { type: "STRING" }, imageCode: { type: "STRING" } },
+        required: ["questionType", "stem", "correctResponse", "allResponses", "explanation"]
+    };
 
-            let finalSchema;
+    let finalSchema;
 
-            if (singleQuestionIndex !== null) {
-                // Logic for regenerating a single question (will use the existing topic)
-                const originalQuestionType = currentQuizData.questions[singleQuestionIndex].questionType;
-                const imageInstruction = includeImages ? `สำหรับคำถามนี้ หากจำเป็นต้องมีรูปภาพประกอบ (เช่น รูปเรขาคณิต) ให้สร้างโค้ด SVG ที่สมบูรณ์สำหรับรูปนั้นๆ แล้วใส่ไว้ใน property ชื่อ "imageCode".` : '';
+    if (singleQuestionIndex !== null) {
+        // Logic for regenerating a single question (will use the existing topic)
+        const originalQuestionType = currentQuizData.questions[singleQuestionIndex].questionType;
+        const imageInstruction = includeImages ? `สำหรับคำถามนี้ หากจำเป็นต้องมีรูปภาพประกอบ (เช่น รูปเรขาคณิต) ให้สร้างโค้ด SVG ที่สมบูรณ์สำหรับรูปนั้นๆ แล้วใส่ไว้ใน property ชื่อ "imageCode".` : '';
 
-                if(originalQuestionType === 'multiple_choice') {
-                    prompt = `สร้างแบบทดสอบปรนัย 1 ข้อ ${topicInstruction}. ให้มี ${numChoices} ตัวเลือก, ระบุคำตอบที่ถูกต้อง, และเพิ่มคำอธิบายสั้นๆ. ${imageInstruction} ${mathPromptInstruction}`;
-                    schema = mcqSchema;
-                } else if (originalQuestionType === 'matching_item') {
-                    prompt = `จากหัวข้อ ${topicInstruction} สร้างคำถามจับคู่ 1 ข้อ (1 คู่) ที่อยู่ในหมวดหมู่เดียวกันกับคำถามเดิม แต่ต้องแตกต่างออกไป. รูปแบบคือ: stem, correctResponse, และ explanation. ${imageInstruction} ${mathPromptInstruction}`;
-                    schema = { type: "OBJECT", properties: { questionType: { type: "STRING", "enum": ["matching_item"] }, stem: { type: "STRING" }, correctResponse: { type: "STRING" }, explanation: { type: "STRING" }, imageCode: { type: "STRING" } }, required: ["questionType", "stem", "correctResponse", "explanation"] };
-                } else { // short_answer
-                    prompt = `สร้างคำถามแบบเติมคำในช่องว่าง 1 ข้อ ${topicInstruction}. แต่ละข้อต้องมีคำถาม (questionText), คำตอบที่เหมาะสม (idealAnswer), และคำอธิบาย (explanation). ${imageInstruction} ${mathPromptInstruction}`;
-                    schema = shortAnswerSchema;
-                }
-                finalSchema = schema;
-            } else {
-                const imageInstruction = includeImages ? `สำหรับแต่ละคำถาม หากจำเป็นต้องมีรูปภาพประกอบ (เช่น รูปเรขาคณิต, กราฟ) ให้สร้างโค้ด SVG ที่สมบูรณ์สำหรับรูปนั้นๆ แล้วใส่ไว้ใน property ชื่อ "imageCode". ถ้าไม่จำเป็น ไม่ต้องใส่ property นี้.` : '';
-
-                switch (quizType) {
-                    case 'multiple_choice':
-                        prompt = `สร้างแบบทดสอบปรนัย ${numQuestions} ข้อ ${topicInstruction}. แต่ละข้อมี ${numChoices} ตัวเลือก, ระบุคำตอบที่ถูกต้อง, และเพิ่มคำอธิบายสั้นๆ. ${imageInstruction} ${mathPromptInstruction}`;
-                        schema = mcqSchema;
-                        break;
-                    case 'fill_in_with_choices':
-                        prompt = `สร้างคำถามแบบเติมคำในช่องว่าง ${numQuestions} ข้อ ${topicInstruction}. แต่ละข้อต้องมีประโยคคำถามที่มีช่องว่าง (questionText containing '.....'), ตัวเลือก ${numChoices} ตัว (options), ดัชนีคำตอบที่ถูกต้อง (correctAnswerIndex), และคำอธิบาย (explanation). ${imageInstruction} ${mathPromptInstruction}`;
-                        schema = mcqSchema;
-                        break;
-                    case 'fill_in_no_choices':
-                        prompt = `สร้างคำถามแบบเติมคำในช่องว่าง ${numQuestions} ข้อ ${topicInstruction}. แต่ละข้อต้องมีคำถาม (questionText containing '.....'), คำตอบที่เหมาะสม (idealAnswer), และคำอธิบาย (explanation). ${imageInstruction} ${mathPromptInstruction}`;
-                        schema = shortAnswerSchema;
-                        break;
-                    case 'mixed':
-                        prompt = `สร้างแบบทดสอบ ${numQuestions} ข้อ ${topicInstruction}, โดยให้มีทั้งคำถามแบบปรนัย (questionType: 'multiple_choice') และแบบเติมคำที่ให้พิมพ์ตอบเอง (questionType: 'short_answer') คละกันไป. สำหรับปรนัย ให้มี ${numChoices} ตัวเลือก. ${imageInstruction} ${mathPromptInstruction}. For each question, specify its 'questionType'. If 'questionType' is 'multiple_choice', provide 'options' and 'correctAnswerIndex'. If 'questionType' is 'short_answer', provide 'idealAnswer'.`;
-                        schema = mixedQuestionSchema;
-                        break;
-                    case 'true_false':
-                        prompt = `สร้างคำถามแบบใช่/ไม่ใช่ ${numQuestions} ข้อ ${topicInstruction}. แต่ละข้อต้องมีคำถาม (questionText), คำตอบที่ถูกต้อง (correctAnswer เป็น true หรือ false), และคำอธิบาย (explanation). ${imageInstruction} ${mathPromptInstruction}`;
-                        schema = trueFalseSchema;
-                        break;
-                    case 'matching':
-                        prompt = `สร้างชุดคำถามจับคู่ ${numQuestions} คู่ ${topicInstruction}. สำหรับแต่ละคู่ ให้สร้างเป็น JSON object แยกกัน โดยแต่ละ object ต้องมี: 'questionType' (ตั้งค่าเป็น 'matching_item'), 'stem' (คำถามฝั่งซ้าย), 'correctResponse' (คำตอบที่ถูกต้องฝั่งขวา), และ 'explanation'. นอกจากนี้ ให้สร้าง key ชื่อ 'allResponses' ซึ่งเป็น array ที่รวบรวม 'correctResponse' ทั้งหมด ${numQuestions} รายการ เพื่อใช้เป็นตัวเลือกใน dropdown. ${imageInstruction} ${mathPromptInstruction}`;
-                        schema = matchingItemSchema;
-                        break;
-                }
-                finalSchema = { type: "OBJECT", properties: { topic: { type: "STRING" }, questions: { type: "ARRAY", items: schema } }, required: ["topic", "questions"] };
-            }
-
-            if (textContent) {
-                prompt = `จากเนื้อหาต่อไปนี้: "${textContent}", ${prompt}`;
-                loadingMessage = 'กำลังวิเคราะห์เนื้อหาและสร้างแบบทดสอบ...';
-            } else {
-                loadingMessage = 'กำลังสร้างแบบทดสอบจากหัวข้อ...';
-            }
-            
-            return handleApiCall(prompt, loadingMessage, finalSchema, singleQuestionIndex);
+        if(originalQuestionType === 'multiple_choice') {
+            prompt = `สร้างแบบทดสอบปรนัย 1 ข้อ ${topicInstruction}. ให้มี ${numChoices} ตัวเลือก, ระบุคำตอบที่ถูกต้อง, และเพิ่มคำอธิบายสั้นๆ. ${imageInstruction} ${simpleMathPrompt}`;
+            schema = mcqSchema;
+        } else if (originalQuestionType === 'matching_item') {
+            prompt = `จากหัวข้อ ${topicInstruction} สร้างคำถามจับคู่ 1 ข้อ (1 คู่) ที่อยู่ในหมวดหมู่เดียวกันกับคำถามเดิม แต่ต้องแตกต่างออกไป. รูปแบบคือ: stem, correctResponse, และ explanation. ${imageInstruction} ${simpleMathPrompt}`;
+            schema = { type: "OBJECT", properties: { questionType: { type: "STRING", "enum": ["matching_item"] }, stem: { type: "STRING" }, correctResponse: { type: "STRING" }, explanation: { type: "STRING" }, imageCode: { type: "STRING" } }, required: ["questionType", "stem", "correctResponse", "explanation"] };
+        } else { // short_answer
+            prompt = `สร้างคำถามแบบเติมคำในช่องว่าง 1 ข้อ ${topicInstruction}. แต่ละข้อต้องมีคำถาม (questionText), คำตอบที่เหมาะสม (idealAnswer), และคำอธิบาย (explanation). ${imageInstruction} ${simpleMathPrompt}`;
+            schema = shortAnswerSchema;
         }
+        finalSchema = schema;
+    } else {
+        const imageInstruction = includeImages ? `สำหรับแต่ละคำถาม หากจำเป็นต้องมีรูปภาพประกอบ (เช่น รูปเรขาคณิต, กราฟ) ให้สร้างโค้ด SVG ที่สมบูรณ์สำหรับรูปนั้นๆ แล้วใส่ไว้ใน property ชื่อ "imageCode". ถ้าไม่จำเป็น ไม่ต้องใส่ property นี้.` : '';
+
+        switch (quizType) {
+            case 'multiple_choice':
+                prompt = `สร้างแบบทดสอบปรนัย ${numQuestions} ข้อ ${topicInstruction}. แต่ละข้อมี ${numChoices} ตัวเลือก, ระบุคำตอบที่ถูกต้อง, และเพิ่มคำอธิบายสั้นๆ. ${imageInstruction} ${simpleMathPrompt}`;
+                schema = mcqSchema;
+                break;
+            case 'fill_in_with_choices':
+                prompt = `สร้างคำถามแบบเติมคำในช่องว่าง ${numQuestions} ข้อ ${topicInstruction}. แต่ละข้อต้องมีประโยคคำถามที่มีช่องว่าง (questionText containing '.....'), ตัวเลือก ${numChoices} ตัว (options), ดัชนีคำตอบที่ถูกต้อง (correctAnswerIndex), และคำอธิบาย (explanation). ${imageInstruction} ${simpleMathPrompt}`;
+                schema = mcqSchema;
+                break;
+            case 'fill_in_no_choices':
+                prompt = `สร้างคำถามแบบเติมคำในช่องว่าง ${numQuestions} ข้อ ${topicInstruction}. แต่ละข้อต้องมีคำถาม (questionText containing '.....'), คำตอบที่เหมาะสม (idealAnswer), และคำอธิบาย (explanation). ${imageInstruction} ${simpleMathPrompt}`;
+                schema = shortAnswerSchema;
+                break;
+            case 'mixed':
+                prompt = `สร้างแบบทดสอบ ${numQuestions} ข้อ ${topicInstruction}, โดยให้มีทั้งคำถามแบบปรนัย (questionType: 'multiple_choice') และแบบเติมคำที่ให้พิมพ์ตอบเอง (questionType: 'short_answer') คละกันไป. สำหรับปรนัย ให้มี ${numChoices} ตัวเลือก. ${imageInstruction} ${simpleMathPrompt}. For each question, specify its 'questionType'. If 'questionType' is 'multiple_choice', provide 'options' and 'correctAnswerIndex'. If 'questionType' is 'short_answer', provide 'idealAnswer'.`;
+                schema = mixedQuestionSchema;
+                break;
+            case 'true_false':
+                prompt = `สร้างคำถามแบบใช่/ไม่ใช่ ${numQuestions} ข้อ ${topicInstruction}. แต่ละข้อต้องมีคำถาม (questionText), คำตอบที่ถูกต้อง (correctAnswer เป็น true หรือ false), และคำอธิบาย (explanation). ${imageInstruction} ${simpleMathPrompt}`;
+                schema = trueFalseSchema;
+                break;
+            case 'matching':
+                prompt = `สร้างชุดคำถามจับคู่ ${numQuestions} คู่ ${topicInstruction}. สำหรับแต่ละคู่ ให้สร้างเป็น JSON object แยกกัน โดยแต่ละ object ต้องมี: 'questionType' (ตั้งค่าเป็น 'matching_item'), 'stem' (คำถามฝั่งซ้าย), 'correctResponse' (คำตอบที่ถูกต้องฝั่งขวา), และ 'explanation'. นอกจากนี้ ให้สร้าง key ชื่อ 'allResponses' ซึ่งเป็น array ที่รวบรวม 'correctResponse' ทั้งหมด ${numQuestions} รายการ เพื่อใช้เป็นตัวเลือกใน dropdown. ${imageInstruction} ${simpleMathPrompt}`;
+                schema = matchingItemSchema;
+                break;
+        }
+        finalSchema = { type: "OBJECT", properties: { topic: { type: "STRING" }, questions: { type: "ARRAY", items: schema } }, required: ["topic", "questions"] };
+    }
+
+    if (textContent) {
+        prompt = `จากเนื้อหาต่อไปนี้: "${textContent}", ${prompt}`;
+        loadingMessage = 'กำลังวิเคราะห์เนื้อหาและสร้างแบบทดสอบ...';
+    } else {
+        loadingMessage = 'กำลังสร้างแบบทดสอบจากหัวข้อ...';
+    }
+    
+    return handleApiCall(prompt, loadingMessage, finalSchema, singleQuestionIndex);
+}
 
         async function generateQuizFromFile(mimeType, base64Data) {
+    // === เพิ่ม: ดึงค่าหัวข้อจาก input field ที่สร้างขึ้นใหม่ ===
+    const topic = document.getElementById('file-topic-input').value.trim();
+
     const quizType = document.getElementById('quiz-type-select').value;
     const numQuestions = document.getElementById('num-questions').value;
     const numChoices = document.getElementById('num-choices').value;
@@ -3225,34 +3257,43 @@ function extractTextFromHtml(htmlString) {
     let prompt = "";
     let schema;
 
-    // สร้าง Prompt และ Schema เหมือนกับฟังก์ชัน generateQuiz() เดิม
+    // === เพิ่ม: สร้างส่วนของ prompt ที่เกี่ยวกับหัวข้อแบบไดนามิก ===
+    let topicInstruction = `เกี่ยวกับหัวข้อ "${topic}"`;
+    if (!topic) { // กรณีที่ผู้ใช้ไม่ได้กรอกหัวข้อ
+        topicInstruction = "โดยให้ AI วิเคราะห์หาหัวข้อหลักจากไฟล์โดยอัตโนมัติ";
+    }
+
     const imageInstruction = includeImages ? `สำหรับแต่ละคำถาม หากจำเป็นต้องมีรูปภาพประกอบ (เช่น รูปเรขาคณิต, กราฟ) ให้สร้างโค้ด SVG ที่สมบูรณ์สำหรับรูปนั้นๆ แล้วใส่ไว้ใน property ชื่อ "imageCode". ถ้าไม่จำเป็น ไม่ต้องใส่ property นี้.` : '';
 
-    // (โค้ดส่วน switch case เพื่อสร้าง prompt และ schema จะเหมือนกับใน generateQuiz() ทุกประการ)
-    // ... (This part is identical to the switch-case block in your existing generateQuiz function) ...
     switch (quizType) {
         case 'multiple_choice':
-            prompt = `สร้างแบบทดสอบปรนัย ${numQuestions} ข้อ. แต่ละข้อมี ${numChoices} ตัวเลือก, ระบุคำตอบที่ถูกต้อง, และเพิ่มคำอธิบายสั้นๆ. ${imageInstruction} ${mathPromptInstruction}`;
+            // === แก้ไข: เพิ่ม ${topicInstruction} เข้าไปใน prompt ===
+            prompt = `สร้างแบบทดสอบปรนัย ${numQuestions} ข้อ ${topicInstruction}. แต่ละข้อมี ${numChoices} ตัวเลือก, ระบุคำตอบที่ถูกต้อง, และเพิ่มคำอธิบายสั้นๆ. ${imageInstruction} ${simpleMathPrompt}`;
             schema = { type: "OBJECT", properties: { questionText: { type: "STRING" }, options: { type: "ARRAY", items: { type: "STRING" } }, correctAnswerIndex: { type: "NUMBER" }, explanation: { type: "STRING" }, imageCode: { type: "STRING" } }, required: ["questionText", "options", "correctAnswerIndex", "explanation"] };
             break;
         case 'fill_in_with_choices':
-            prompt = `สร้างคำถามแบบเติมคำในช่องว่าง ${numQuestions} ข้อ. แต่ละข้อต้องมีประโยคคำถามที่มีช่องว่าง (questionText containing '.....'), ตัวเลือก ${numChoices} ตัว (options), ดัชนีคำตอบที่ถูกต้อง (correctAnswerIndex), และคำอธิบาย (explanation). ${imageInstruction} ${mathPromptInstruction}`;
+             // === แก้ไข: เพิ่ม ${topicInstruction} เข้าไปใน prompt ===
+            prompt = `สร้างคำถามแบบเติมคำในช่องว่าง ${numQuestions} ข้อ ${topicInstruction}. แต่ละข้อต้องมีประโยคคำถามที่มีช่องว่าง (questionText containing '.....'), ตัวเลือก ${numChoices} ตัว (options), ดัชนีคำตอบที่ถูกต้อง (correctAnswerIndex), และคำอธิบาย (explanation). ${imageInstruction} ${simpleMathPrompt}`;
             schema = { type: "OBJECT", properties: { questionText: { type: "STRING" }, options: { type: "ARRAY", items: { type: "STRING" } }, correctAnswerIndex: { type: "NUMBER" }, explanation: { type: "STRING" }, imageCode: { type: "STRING" } }, required: ["questionText", "options", "correctAnswerIndex", "explanation"] };
             break;
         case 'fill_in_no_choices':
-            prompt = `สร้างคำถามแบบเติมคำในช่องว่าง ${numQuestions} ข้อ. แต่ละข้อต้องมีคำถาม (questionText containing '.....'), คำตอบที่เหมาะสม (idealAnswer), และคำอธิบาย (explanation). ${imageInstruction} ${mathPromptInstruction}`;
+             // === แก้ไข: เพิ่ม ${topicInstruction} เข้าไปใน prompt ===
+            prompt = `สร้างคำถามแบบเติมคำในช่องว่าง ${numQuestions} ข้อ ${topicInstruction}. แต่ละข้อต้องมีคำถาม (questionText containing '.....'), คำตอบที่เหมาะสม (idealAnswer), และคำอธิบาย (explanation). ${imageInstruction} ${simpleMathPrompt}`;
             schema = { type: "OBJECT", properties: { questionText: { type: "STRING" }, idealAnswer: { type: "STRING" }, explanation: { type: "STRING" }, imageCode: { type: "STRING" } }, required: ["questionText", "idealAnswer", "explanation"] };
             break;
         case 'mixed':
-            prompt = `สร้างแบบทดสอบ ${numQuestions} ข้อ, โดยให้มีทั้งคำถามแบบปรนัย (questionType: 'multiple_choice') และแบบเติมคำที่ให้พิมพ์ตอบเอง (questionType: 'short_answer') คละกันไป. สำหรับปรนัย ให้มี ${numChoices} ตัวเลือก. ${imageInstruction} ${mathPromptInstruction}. For each question, specify its 'questionType'. If 'questionType' is 'multiple_choice', provide 'options' and 'correctAnswerIndex'. If 'questionType' is 'short_answer', provide 'idealAnswer'.`;
+             // === แก้ไข: เพิ่ม ${topicInstruction} เข้าไปใน prompt ===
+            prompt = `สร้างแบบทดสอบ ${numQuestions} ข้อ ${topicInstruction}, โดยให้มีทั้งคำถามแบบปรนัย (questionType: 'multiple_choice') และแบบเติมคำที่ให้พิมพ์ตอบเอง (questionType: 'short_answer') คละกันไป. สำหรับปรนัย ให้มี ${numChoices} ตัวเลือก. ${imageInstruction} ${simpleMathPrompt}. For each question, specify its 'questionType'. If 'questionType' is 'multiple_choice', provide 'options' and 'correctAnswerIndex'. If 'questionType' is 'short_answer', provide 'idealAnswer'.`;
             schema = { type: "OBJECT", properties: { questionText: { "type": "STRING" }, questionType: { "type": "STRING", "enum": ["multiple_choice", "short_answer"] }, options: { type: "ARRAY", items: { type: "STRING" } }, correctAnswerIndex: { type: "NUMBER" }, idealAnswer: { type: "STRING" }, explanation: { type: "STRING" }, imageCode: { type: "STRING" } }, required: ["questionText", "questionType", "explanation"] };
             break;
         case 'true_false':
-            prompt = `สร้างคำถามแบบใช่/ไม่ใช่ ${numQuestions} ข้อ. แต่ละข้อต้องมีคำถาม (questionText), คำตอบที่ถูกต้อง (correctAnswer เป็น true หรือ false), และคำอธิบาย (explanation). ${imageInstruction} ${mathPromptInstruction}`;
+             // === แก้ไข: เพิ่ม ${topicInstruction} เข้าไปใน prompt ===
+            prompt = `สร้างคำถามแบบใช่/ไม่ใช่ ${numQuestions} ข้อ ${topicInstruction}. แต่ละข้อต้องมีคำถาม (questionText), คำตอบที่ถูกต้อง (correctAnswer เป็น true หรือ false), และคำอธิบาย (explanation). ${imageInstruction} ${simpleMathPrompt}`;
             schema = { type: "OBJECT", properties: { questionText: { type: "STRING" }, correctAnswer: { type: "BOOLEAN" }, explanation: { type: "STRING" }, imageCode: { type: "STRING" } }, required: ["questionText", "correctAnswer", "explanation"] };
             break;
         case 'matching':
-            prompt = `สร้างชุดคำถามจับคู่ ${numQuestions} คู่. สำหรับแต่ละคู่ ให้สร้างเป็น JSON object แยกกัน โดยแต่ละ object ต้องมี: 'questionType' (ตั้งค่าเป็น 'matching_item'), 'stem' (คำถามฝั่งซ้าย), 'correctResponse' (คำตอบที่ถูกต้องฝั่งขวา), และ 'explanation'. นอกจากนี้ ให้สร้าง key ชื่อ 'allResponses' ซึ่งเป็น array ที่รวบรวม 'correctResponse' ทั้งหมด ${numQuestions} รายการ เพื่อใช้เป็นตัวเลือกใน dropdown. ${imageInstruction} ${mathPromptInstruction}`;
+             // === แก้ไข: เพิ่ม ${topicInstruction} เข้าไปใน prompt ===
+            prompt = `สร้างชุดคำถามจับคู่ ${numQuestions} คู่ ${topicInstruction}. สำหรับแต่ละคู่ ให้สร้างเป็น JSON object แยกกัน โดยแต่ละ object ต้องมี: 'questionType' (ตั้งค่าเป็น 'matching_item'), 'stem' (คำถามฝั่งซ้าย), 'correctResponse' (คำตอบที่ถูกต้องฝั่งขวา), และ 'explanation'. นอกจากนี้ ให้สร้าง key ชื่อ 'allResponses' ซึ่งเป็น array ที่รวบรวม 'correctResponse' ทั้งหมด ${numQuestions} รายการ เพื่อใช้เป็นตัวเลือกใน dropdown. ${imageInstruction} ${simpleMathPrompt}`;
             schema = { type: "OBJECT", properties: { questionType: { type: "STRING", "enum": ["matching_item"] }, stem: { type: "STRING" }, correctResponse: { type: "STRING" }, allResponses: { type: "ARRAY", items: { type: "STRING" } }, explanation: { type: "STRING" }, imageCode: { type: "STRING" } }, required: ["questionType", "stem", "correctResponse", "allResponses", "explanation"] };
             break;
     }
@@ -3281,7 +3322,6 @@ function extractTextFromHtml(htmlString) {
     };
 
     // เรียกใช้ handleApiCall กับ Payload ใหม่
-    // เราต้องส่ง `payload.contents[0].parts` แทนที่จะเป็นแค่ string
     return handleApiCall(payload.contents[0].parts, 'AI กำลังวิเคราะห์ไฟล์และสร้างแบบทดสอบ...', finalSchema);
 }
 
@@ -3363,7 +3403,7 @@ function extractTextFromHtml(htmlString) {
                 displayGeneratedQuiz(currentQuizData);
             } else {
                 // Handle generating a new quiz
-                currentQuizData = sanitizeQuizData(parsedData);
+                currentQuizData = parsedData;
                 const quizTypeFromUI = document.getElementById('quiz-type-select').value;
 
                 // Standardize the quizType and questionType properties
@@ -3402,6 +3442,12 @@ function extractTextFromHtml(htmlString) {
         document.getElementById('generate-from-topic-btn').disabled = false;
         document.getElementById('generate-from-text-btn').disabled = false;
         document.getElementById('generate-from-link-btn').disabled = false;
+        
+        // === เพิ่มบรรทัดนี้เข้ามา เพื่อเปิดใช้งานปุ่มสร้างจากไฟล์อีกครั้ง ===
+        const fileBtn = document.getElementById('generate-from-file-btn');
+        if (fileBtn) {
+            fileBtn.disabled = false;
+        }
     }
 }
 
@@ -4724,70 +4770,70 @@ function renderQuizLeaderboard(submissions, quizData, tableBodyId) {
 
         // --- Student Flow ---
         async function handleLoadQuiz() {
-            const quizIdInput = document.getElementById('quiz-id-input');
-            const quizId = quizIdInput.value.trim();
-            if (!quizId) {
-                showMessage("กรุณาป้อนรหัสแบบทดสอบ");
+    const quizIdInput = document.getElementById('quiz-id-input');
+    const quizId = quizIdInput.value.trim();
+    if (!quizId) {
+        showMessage("กรุณาป้อนรหัสแบบทดสอบ");
+        return;
+    }
+
+    loadQuizBtn.disabled = true;
+    loadQuizBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>กำลังโหลด...';
+
+    try {
+        const quizDocRef = doc(db, `artifacts/${appId}/public/data/quizzes`, quizId);
+        const quizDocSnap = await getDoc(quizDocRef);
+
+        if (!quizDocSnap.exists()) {
+            showMessage("ไม่พบแบบทดสอบสำหรับรหัสนี้");
+            return;
+        }
+
+        currentQuizData = { id: quizDocSnap.id, ...quizDocSnap.data() };
+
+        // Check Quiz Status
+        const status = currentQuizData.status || 'active';
+        const now = new Date();
+        if (status === 'inactive') {
+            showMessage("แบบทดสอบนี้ปิดใช้งานอยู่");
+            return;
+        }
+        if (status === 'scheduled') {
+            const startTime = currentQuizData.startTime ? new Date(currentQuizData.startTime) : null;
+            const endTime = currentQuizData.endTime ? new Date(currentQuizData.endTime) : null;
+            
+            if (startTime && now < startTime) {
+                showMessage(`แบบทดสอบนี้จะเปิดให้ทำในวันที่ ${startTime.toLocaleString('th-TH', { hour12: false })}`);
                 return;
             }
-
-            loadQuizBtn.disabled = true;
-            loadQuizBtn.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>กำลังโหลด...';
-
-            try {
-                const quizDocRef = doc(db, `artifacts/${appId}/public/data/quizzes`, quizId);
-                const quizDocSnap = await getDoc(quizDocRef);
-
-                if (!quizDocSnap.exists()) {
-                    showMessage("ไม่พบแบบทดสอบสำหรับรหัสนี้");
-                    return;
-                }
-
-                currentQuizData = sanitizeQuizData({ id: quizDocSnap.id, ...quizDocSnap.data() });
-
-                // Check Quiz Status
-                const status = currentQuizData.status || 'active';
-                const now = new Date();
-                if (status === 'inactive') {
-                    showMessage("แบบทดสอบนี้ปิดใช้งานอยู่");
-                    return;
-                }
-                if (status === 'scheduled') {
-                    const startTime = currentQuizData.startTime ? new Date(currentQuizData.startTime) : null;
-                    const endTime = currentQuizData.endTime ? new Date(currentQuizData.endTime) : null;
-                    
-                    if (startTime && now < startTime) {
-                        showMessage(`แบบทดสอบนี้จะเปิดให้ทำในวันที่ ${startTime.toLocaleString('th-TH', { hour12: false })}`);
-                        return;
-                    }
-                    if (endTime && now > endTime) {
-                        showMessage("แบบทดสอบนี้หมดเวลาแล้ว");
-                        return;
-                    }
-                }
-                
-                const projectId = currentQuizData.projectId;
-				currentProjectId = projectId;   // <-- เพิ่มบรรทัดนี้
-                const projectDocRef = doc(db, `artifacts/${appId}/public/data/projects`, projectId);
-                const projectDocSnap = await getDoc(projectDocRef);
-
-                if (!projectDocSnap.exists()) {
-                    showMessage("เกิดข้อผิดพลาด: ไม่พบโปรเจคที่เกี่ยวข้องกับแบบทดสอบนี้");
-                    return;
-                }
-                
-                const projectData = projectDocSnap.data();
-                currentStudentProjectData = projectData; 
-                displayStudentNameSelector(projectData.students, currentQuizData.topic);
-
-            } catch (error) {
-                console.error("Error loading quiz for student:", error);
-                showMessage("เกิดข้อผิดพลาดในการโหลดแบบทดสอบ");
-            } finally {
-                loadQuizBtn.disabled = false;
-                loadQuizBtn.innerHTML = '<i class="fas fa-search mr-2"></i>ค้นหาแบบทดสอบ';
+            if (endTime && now > endTime) {
+                showMessage("แบบทดสอบนี้หมดเวลาแล้ว");
+                return;
             }
         }
+        
+        const projectId = currentQuizData.projectId;
+        currentProjectId = projectId;   // <-- เพิ่มบรรทัดนี้
+        const projectDocRef = doc(db, `artifacts/${appId}/public/data/projects`, projectId);
+        const projectDocSnap = await getDoc(projectDocRef);
+
+        if (!projectDocSnap.exists()) {
+            showMessage("เกิดข้อผิดพลาด: ไม่พบโปรเจคที่เกี่ยวข้องกับแบบทดสอบนี้");
+            return;
+        }
+        
+        const projectData = projectDocSnap.data();
+        currentStudentProjectData = projectData; 
+        displayStudentNameSelector(projectData.students, currentQuizData.topic);
+
+    } catch (error) {
+        console.error("Error loading quiz for student:", error);
+        showMessage("เกิดข้อผิดพลาดในการโหลดแบบทดสอบ");
+    } finally {
+        loadQuizBtn.disabled = false;
+        loadQuizBtn.innerHTML = '<i class="fas fa-search mr-2"></i>ค้นหาแบบทดสอบ';
+    }
+}
 
 async function handleJoinLiveGame() {
     const pinInput = document.getElementById('game-pin-input');
@@ -4829,7 +4875,7 @@ async function handleJoinLiveGame() {
             showMessage("เกิดข้อผิดพลาด: ไม่พบข้อมูลแบบทดสอบของเกมนี้");
             return;
         }
-        currentQuizData = sanitizeQuizData({ id: quizDocSnap.id, ...quizDocSnap.data() });
+        currentQuizData = { id: quizDocSnap.id, ...quizDocSnap.data() };
 
         // Check if nickname already exists
         if (gameData.players && gameData.players[nickname]) {
@@ -5468,6 +5514,7 @@ async function startAdaptiveFlow(detailedAnswers, score, totalQuestions) {
         displayResultsScoreOnly(score, 0, [], totalQuestions);
     }
 }
+
 async function generateRemedialQuiz(weaknessExplanations) {
     // แสดงสถานะกำลังโหลดให้นักเรียนทราบ
     studentReadingArea.innerHTML = `
@@ -5492,6 +5539,7 @@ async function generateRemedialQuiz(weaknessExplanations) {
           - options: (array of 4 strings)
           - correctAnswerIndex: (number)
           - explanation: (string)
+		  ${simpleMathPrompt}
     `;
 
     // 2. กำหนด Schema สำหรับการสร้างข้อสอบ (ใช้ mcqSchema ที่มีอยู่แล้วได้)
@@ -6523,9 +6571,9 @@ await processAndSubmitAnswers(studentAnswersPerQuestion, previousAttempts);
                 
                 // --- [การแก้ไขที่สำคัญ] ---
                 // ค้นหาคำตอบจากข้อความของคำถาม แทนที่จะใช้ลำดับที่ (index)
-                const studentAnswerForThisQuestion = latestAttempt.answers.find(ans =>
-                    ans.originalQuestionText === questionDisplayText
-                );
+                const studentAnswerForThisQuestion =
+    latestAttempt.answers.find(ans => ans.originalQuestionText === questionDisplayText)
+    ?? latestAttempt.answers[index] ?? null;
 
                 if (studentAnswerForThisQuestion) {
                     if (studentAnswerForThisQuestion.isCorrect) {
